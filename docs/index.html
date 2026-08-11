@@ -1,0 +1,145 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>墨核 AI Studio (InkCore) · 功能画廊</title><meta name="description" content="墨核 AI Studio 桌面端 AI 助手 —— 对话 / 生图 / 代码运行 / Agent 编排 / 本地模型，数据全部留在本机。"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d14; --bg2:#11141f; --card:#161a26; --line:#252b3a;
+  --tx:#e8eaf2; --tx2:#9aa3b8; --tx3:#6b7488;
+  --ac:#7c6cff; --ac2:#33c9e6;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--bg);color:var(--tx);line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+/* ---------- hero ---------- */
+.hero{position:relative;overflow:hidden;padding:72px 0 56px;text-align:center;
+  background:radial-gradient(1000px 420px at 50% -80px,rgba(124,108,255,.22),transparent 70%),
+             linear-gradient(180deg,#141826,var(--bg))}
+.badge{display:inline-block;font-size:12px;letter-spacing:.08em;color:var(--ac2);
+  border:1px solid rgba(51,201,230,.35);background:rgba(51,201,230,.08);
+  padding:5px 14px;border-radius:999px;margin-bottom:18px}
+.hero h1{font-size:40px;font-weight:800;letter-spacing:-.5px;margin-bottom:14px;
+  background:linear-gradient(96deg,#fff 20%,#a9c6ff 60%,#7c6cff);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:var(--tx2);font-size:16px;max-width:640px;margin:0 auto}
+.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:30px}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:13px 26px;border-radius:12px;
+  font-weight:700;font-size:15px;transition:.18s;border:1px solid transparent}
+.btn-main{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;
+  box-shadow:0 8px 26px rgba(124,108,255,.34)}
+.btn-main:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(124,108,255,.46)}
+.btn-sec{background:rgba(255,255,255,.05);border-color:var(--line);color:var(--tx)}
+.btn-sec:hover{background:rgba(255,255,255,.1);border-color:#39415a}
+.btn small{display:block;font-weight:400;font-size:11.5px;opacity:.8;margin-top:1px}
+.tip{margin-top:16px;font-size:12.5px;color:var(--tx3)}
+
+/* ---------- stats ---------- */
+.stats{display:flex;justify-content:center;gap:56px;flex-wrap:wrap;margin-top:44px;
+  padding-top:32px;border-top:1px solid rgba(255,255,255,.06)}
+.stat b{display:block;font-size:30px;font-weight:800;
+  background:linear-gradient(135deg,#fff,#9ec5ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{font-size:12.5px;color:var(--tx3)}
+
+/* ---------- nav ---------- */
+.nav{position:sticky;top:0;z-index:40;background:rgba(11,13,20,.86);
+  backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;gap:6px;overflow-x:auto;padding:12px 24px;max-width:1240px;margin:0 auto}
+.nav a{white-space:nowrap;font-size:13.5px;color:var(--tx2);padding:7px 15px;border-radius:9px;transition:.15s}
+.nav a:hover{color:var(--tx);background:rgba(255,255,255,.06)}
+
+/* ---------- section ---------- */
+section{padding:56px 0 8px;scroll-margin-top:60px}
+.sec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:26px;flex-wrap:wrap}
+.sec-h h2{font-size:23px;font-weight:750}
+.sec-h em{font-style:normal;font-size:13px;color:var(--tx3)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:22px}
+
+figure{background:var(--card);border:1px solid var(--line);border-radius:15px;overflow:hidden;
+  transition:.2s;display:flex;flex-direction:column}
+figure:hover{border-color:#3c4358;transform:translateY(-3px);box-shadow:0 14px 34px rgba(0,0,0,.42)}
+.shot{position:relative;cursor:zoom-in;background:#0a0c12;line-height:0}
+.shot img{width:100%;display:block}
+.shot::after{content:'点击放大';position:absolute;right:10px;bottom:10px;font-size:11px;
+  background:rgba(0,0,0,.62);color:#fff;padding:4px 10px;border-radius:6px;opacity:0;transition:.18s;line-height:1.4}
+figure:hover .shot::after{opacity:1}
+figcaption{padding:15px 17px 17px;flex:1;display:flex;flex-direction:column}
+figcaption b{font-size:15px;font-weight:700;display:block;margin-bottom:7px}
+figcaption p{font-size:13.2px;color:var(--tx2);line-height:1.68;flex:1}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.tag{font-size:11px;color:#a9b4cc;background:rgba(124,108,255,.11);
+  border:1px solid rgba(124,108,255,.24);padding:3px 9px;border-radius:6px}
+
+/* ---------- changelog ---------- */
+.log{background:var(--bg2);border:1px solid var(--line);border-radius:15px;padding:30px 32px;margin-top:14px}
+.log ol{list-style:none;counter-reset:n}
+.log li{counter-increment:n;padding:13px 0 13px 44px;position:relative;border-bottom:1px dashed rgba(255,255,255,.07)}
+.log li:last-child{border-bottom:none}
+.log li::before{content:counter(n);position:absolute;left:0;top:14px;width:26px;height:26px;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;
+  background:linear-gradient(135deg,var(--ac),var(--ac2));border-radius:8px}
+.log b{font-size:14.5px;display:block;margin-bottom:3px}
+.log span{font-size:13px;color:var(--tx2)}
+
+/* ---------- install ---------- */
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.col{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px}
+.col h3{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.col ol,.col ul{padding-left:19px;font-size:13.4px;color:var(--tx2)}
+.col li{margin:7px 0}
+code{background:rgba(255,255,255,.07);border:1px solid var(--line);padding:2px 7px;
+  border-radius:5px;font-family:'SF Mono',Consolas,monospace;font-size:12.4px;color:#a9c6ff}
+pre{background:#0a0c12;border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+  overflow-x:auto;margin-top:10px}
+pre code{background:none;border:none;padding:0;color:#c3cde0;font-size:12.5px;line-height:1.75}
+
+footer{text-align:center;color:var(--tx3);font-size:12.5px;padding:60px 24px 46px;
+  margin-top:56px;border-top:1px solid var(--line)}
+footer a{color:var(--ac2)}
+
+/* ---------- lightbox ---------- */
+#lb{position:fixed;inset:0;z-index:99;background:rgba(5,6,10,.95);display:none;
+  align-items:center;justify-content:center;padding:36px}
+#lb.on{display:flex}
+#lb img{max-width:100%;max-height:100%;border-radius:9px;box-shadow:0 24px 70px rgba(0,0,0,.7)}
+#lb .x{position:absolute;top:20px;right:26px;font-size:30px;color:#fff;cursor:pointer;
+  opacity:.65;line-height:1;background:none;border:none}
+#lb .x:hover{opacity:1}
+#lb .ar{position:absolute;top:50%;transform:translateY(-50%);font-size:34px;color:#fff;
+  cursor:pointer;opacity:.5;padding:22px 16px;background:none;border:none;user-select:none}
+#lb .ar:hover{opacity:1}
+#lb .prev{left:12px}#lb .next{right:12px}
+#lb .cap{position:absolute;bottom:20px;left:0;right:0;text-align:center;color:#c8cee0;font-size:13.5px}
+
+@media(max-width:860px){
+  .hero h1{font-size:29px}
+  .grid{grid-template-columns:1fr}
+  .stats{gap:32px}
+  .wrap{padding:0 16px}
+}
+</style></head><body><div class="hero"><div class="wrap"><div class="badge">v1.0.0 · Windows 桌面端</div><h1>墨核 AI Studio · 功能画廊</h1><p>一个装在本机的全能 AI 助手：写作、生图、跑代码、Agent 编排、本地模型全都有。API Key 和对话数据只存在你自己电脑上，不上传任何服务器。</p><div class="btns"><a class="btn btn-main" href="https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore-Setup.exe">⬇ 下载安装版<small>推荐 · 双击安装即可用</small></a><a class="btn btn-sec" href="https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore-win.zip">📦 免安装 ZIP<small>解压即用 · 绿色版</small></a><a class="btn btn-sec" href="https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore-src.zip">🐍 源码 ZIP<small>自己跑 Python</small></a></div><div class="tip">全部下载走 GitHub Releases · <a href="https://github.com/wxadxmyz/InkCore" style="color:var(--ac2)">github.com/wxadxmyz/InkCore</a> · 首次启用本地模型会自动拉取约 1.1GB 权重</div><div class="stats"><div class="stat"><b>14</b><span>功能截图</span></div><div class="stat"><b>10</b><span>模型供应商</span></div><div class="stat"><b>5</b><span>可全屏面板</span></div><div class="stat"><b>10</b><span>本次改动项</span></div></div></div></div><div class="nav"><div class="nav-in"><a href="#core">核心界面</a><a href="#model">模型与设置</a><a href="#work">工作面板 · 全屏</a><a href="#fun">玩法与技能</a><a href="#mem">记忆与产物</a><a href="#log">本次更新</a><a href="#install">安装方式</a></div></div><div class="wrap"><section id="core"><div class="sec-h"><h2>核心界面</h2><em>整体布局与日常入口</em></div><div class="grid"><figure><div class="shot"><img src="shots/g_01_main.png" alt="主界面 · 对话工作台" loading="lazy"></div><figcaption><b>主界面 · 对话工作台</b><p>左侧会话列表，中间对话流，右侧可收起的功能抽屉。输入框上方是快捷 chip，直接点「AI 生图」「联网搜索」等即可切换意图，不用再单独开面板。</p><div class="tags"><span class="tag">三栏布局</span><span class="tag">快捷 chip</span><span class="tag">深色墨感</span></div></figcaption></figure></div></section><section id="model"><div class="sec-h"><h2>模型与设置</h2><em>10 家供应商 · 本地模型 · Key 管理</em></div><div class="grid"><figure><div class="shot"><img src="shots/g_02_settings_providers.png" alt="设置 · 多供应商模型中心" loading="lazy"></div><figcaption><b>设置 · 多供应商模型中心</b><p>弹窗式 tab 设置，一屏切换 10 家供应商。每家的 API Key 独立保存，来回切换不会互相覆盖，换回来时自动回填上次填过的 Key。</p><div class="tags"><span class="tag">10 家供应商</span><span class="tag">Key 独立存储</span><span class="tag">tab 式</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_03_provider_siliconflow.png" alt="免费聚合供应商 · SiliconFlow / OpenRouter" loading="lazy"></div><figcaption><b>免费聚合供应商 · SiliconFlow / OpenRouter</b><p>新增两家聚合平台，注册即送额度，适合零成本先跑起来。模型下拉里已预置 Qwen2.5、GLM、gpt-4o-mini 等常用型号。</p><div class="tags"><span class="tag">白嫖友好</span><span class="tag">预置模型</span><span class="tag">新增</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_04_inherit_key.png" alt="一键继承 Key 到生图 / 视觉" loading="lazy"></div><figcaption><b>一键继承 Key 到生图 / 视觉</b><p>勾上「继承主模型 Key」，生图和视觉理解就直接复用对话模型的 Key 和 Base URL，省掉重复三遍填同一串密钥的折磨。</p><div class="tags"><span class="tag">少填两次</span><span class="tag">自动同步</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_05_settings_ollama.png" alt="本地模型 · Ollama 管理" loading="lazy"></div><figcaption><b>本地模型 · Ollama 管理</b><p>Ollama 从独立面板挪进了设置页，作为「本地模型」tab。可刷新已装模型列表、一键切换为当前对话模型、删除不用的权重。</p><div class="tags"><span class="tag">Ollama</span><span class="tag">完全离线</span><span class="tag">已归位</span></div></figcaption></figure></div></section><section id="work"><div class="sec-h"><h2>工作面板 · 全屏</h2><em>终端 / 代码 / Agent / 知识库</em></div><div class="grid"><figure><div class="shot"><img src="shots/g_06_terminal_full.png" alt="终端 · 全屏覆盖" loading="lazy"></div><figcaption><b>终端 · 全屏覆盖</b><p>点面板右上角的最大化按钮，抽屉铺满整个聊天区。终端这类需要看长输出的场景，400px 抽屉实在不够用。</p><div class="tags"><span class="tag">全屏</span><span class="tag">一键还原</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_07_code_full.png" alt="代码运行 · 聊天直接生成并自动全屏" loading="lazy"></div><figcaption><b>代码运行 · 聊天直接生成并自动全屏</b><p>在对话里说「帮我写个冒泡排序并运行」，后端识别意图后直接生成代码、自动打开代码面板、自动填入、自动全屏。不用手动复制粘贴。</p><div class="tags"><span class="tag">意图识别</span><span class="tag">自动填入</span><span class="tag">自动全屏</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_08_agent_full.png" alt="Agent 编排 · 自动拆解任务" loading="lazy"></div><figcaption><b>Agent 编排 · 自动拆解任务</b><p>对话中描述目标，模型自动拆成可执行步骤列表并推进。同样支持从聊天直接唤起并铺满全屏。</p><div class="tags"><span class="tag">任务拆解</span><span class="tag">自动唤起</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_14_knowledge.png" alt="知识库 · 文档理解 (RAG)" loading="lazy"></div><figcaption><b>知识库 · 文档理解 (RAG)</b><p>上传文档后建立本地索引，对话时自动检索相关片段作为上下文。文件不出本机，检索也在本地完成。</p><div class="tags"><span class="tag">RAG</span><span class="tag">本地索引</span><span class="tag">可全屏</span></div></figcaption></figure></div></section><section id="fun"><div class="sec-h"><h2>玩法与技能</h2><em>内置玩法 · 自建导入 · 技能卡片</em></div><div class="grid"><figure><div class="shot"><img src="shots/g_09_fun_list.png" alt="离谱玩法 · 玩法列表" loading="lazy"></div><figcaption><b>离谱玩法 · 玩法列表</b><p>内置 6 个预设玩法（毒舌吐槽、废话生成器、赛博算命等）。面板同样支持全屏，长文本输出看得清。</p><div class="tags"><span class="tag">6 个预设</span><span class="tag">可全屏</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_10_fun_newform.png" alt="离谱玩法 · 自建与导入导出" loading="lazy"></div><figcaption><b>离谱玩法 · 自建与导入导出</b><p>自己写 prompt 就能新建玩法，存进本地 funs.json。支持整包导出 JSON 分享给别人，也能导入别人的玩法包。</p><div class="tags"><span class="tag">用户自建</span><span class="tag">导入导出</span><span class="tag">新增</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_12_skills.png" alt="技能中心" loading="lazy"></div><figcaption><b>技能中心</b><p>把常用能力做成可点即用的卡片：文案改写、翻译、总结、表格提取等。技能只做触发，结果回落到对话流里，不额外占屏。</p><div class="tags"><span class="tag">卡片式</span><span class="tag">即点即用</span></div></figcaption></figure></div></section><section id="mem"><div class="sec-h"><h2>记忆与产物</h2><em>空状态引导 · 会话产物留痕</em></div><div class="grid"><figure><div class="shot"><img src="shots/g_11_memory_empty.png" alt="会话记忆 · 空状态引导" loading="lazy"></div><figcaption><b>会话记忆 · 空状态引导</b><p>面板没内容时不再是一片空白，改为给出说明和下一步动作提示，新用户不至于打开就懵。所有功能面板都做了这套空状态。</p><div class="tags"><span class="tag">空状态</span><span class="tag">新手引导</span></div></figcaption></figure><figure><div class="shot"><img src="shots/g_13_artifacts_strip.png" alt="会话产物条" loading="lazy"></div><figcaption><b>会话产物条</b><p>本次会话生成过的图片、小游戏等产物，以缩略图形式钉在输入框上方，点一下就能重新打开，不用往上翻聊天记录找。可折叠收起。</p><div class="tags"><span class="tag">产物留痕</span><span class="tag">一键回看</span><span class="tag">可折叠</span></div></figcaption></figure></div></section><section id="log"><div class="sec-h"><h2>本次更新</h2><em>v1.0.0 · 共 10 项改动</em></div><div class="log"><ol><li><b>面板宽度统一 400px</b><span>删掉了 340/392 的分档逻辑，所有抽屉一个宽度，视觉不再跳动。</span></li><li><b>全屏覆盖按钮</b><span>知识库 / 终端 / 代码 / Agent / 离谱玩法 五个工作型面板支持一键铺满聊天区。</span></li><li><b>聊天自动唤起面板</b><span>说「写段代码并运行」，自动生成 + 自动填入 + 自动全屏，Agent 与终端同理。</span></li><li><b>离谱玩法自建</b><span>新建 / 删除 / 导出 JSON / 导入 JSON，玩法可以自己攒也可以互相分享。</span></li><li><b>每供应商独立记 Key</b><span>切换供应商不再冲掉上一家的密钥，切回来自动回填。</span></li><li><b>新增免费聚合供应商</b><span>SiliconFlow 与 OpenRouter，注册送额度，零成本起步。</span></li><li><b>继承 Key 到生图 / 视觉</b><span>一个勾选框省掉两次重复填写。</span></li><li><b>面板空状态引导</b><span>空面板不再是白板，给出说明与下一步提示。</span></li><li><b>会话产物条</b><span>生成过的图片 / 小游戏钉在输入框上方，点开即回看。</span></li><li><b>Ollama 并入设置</b><span>本地模型作为设置页的一个 tab，不再单占一个功能位。</span></li></ol></div></section><section id="install"><div class="sec-h"><h2>安装方式</h2><em>三选一，推荐第一种</em></div><div class="cols"><div class="col"><h3>① 安装版 exe</h3><ol><li>点上方「下载安装版」，拿到 <code>InkCore-Setup.exe</code></li><li>双击运行，一路下一步</li><li>桌面出现「墨核 AI Studio」图标，双击启动</li><li>首次进入先到设置里填一个模型 API Key</li></ol><p style="font-size:12.5px;color:var(--tx3);margin-top:12px">Windows 可能提示「未知发布者」，点「更多信息 → 仍要运行」即可（未做代码签名）。</p></div><div class="col"><h3>② 免安装 ZIP</h3><ol><li>下载 <code>InkCore-win.zip</code></li><li>解压到任意目录（路径别带中文最稳）</li><li>双击里面的 <code>InkCore.exe</code></li></ol><p style="font-size:12.5px;color:var(--tx3);margin-top:12px">不写注册表，删目录即卸载。适合放 U 盘或公司电脑。</p></div><div class="col"><h3>③ 源码运行</h3><p style="font-size:13.4px;color:var(--tx2)">需要 Python 3.11+：</p><pre><code>git clone https://github.com/wxadxmyz/InkCore.git
+cd InkCore
+pip install -r requirements.txt
+python desktop_app.py</code></pre><p style="font-size:12.5px;color:var(--tx3);margin-top:10px">只想开网页版就跑 <code>python app.py</code>，浏览器访问 <code>http://127.0.0.1:7860</code>。</p></div></div></section></div><footer>墨核 AI Studio (InkCore) v1.0.0 · <a href="https://github.com/wxadxmyz/InkCore">GitHub 仓库</a> · <a href="https://github.com/wxadxmyz/InkCore/releases">全部版本</a><br>本页由 tools/build_gallery.py 自动生成 · 所有截图取自真实运行界面</footer><div id="lb"><button class="x" id="lbx">&times;</button><button class="ar prev" id="lbp">&#8249;</button><img id="lbimg" alt=""><button class="ar next" id="lbn">&#8250;</button><div class="cap" id="lbcap"></div></div><script>
+(function(){
+  var imgs=[].slice.call(document.querySelectorAll('.shot img'));
+  var lb=document.getElementById('lb'), big=document.getElementById('lbimg'),
+      cap=document.getElementById('lbcap'), i=0;
+  function show(n){
+    if(n<0)n=imgs.length-1; if(n>=imgs.length)n=0; i=n;
+    big.src=imgs[i].src; cap.textContent=(i+1)+' / '+imgs.length+'  ·  '+imgs[i].alt;
+  }
+  imgs.forEach(function(im,n){
+    im.parentNode.addEventListener('click',function(){ show(n); lb.classList.add('on'); });
+  });
+  function close(){ lb.classList.remove('on'); big.src=''; }
+  document.getElementById('lbx').onclick=close;
+  document.getElementById('lbp').onclick=function(e){e.stopPropagation();show(i-1);};
+  document.getElementById('lbn').onclick=function(e){e.stopPropagation();show(i+1);};
+  lb.addEventListener('click',function(e){ if(e.target===lb) close(); });
+  document.addEventListener('keydown',function(e){
+    if(!lb.classList.contains('on'))return;
+    if(e.key==='Escape')close();
+    if(e.key==='ArrowLeft')show(i-1);
+    if(e.key==='ArrowRight')show(i+1);
+  });
+})();
+</script></body></html>

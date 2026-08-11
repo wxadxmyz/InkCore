@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>墨核 · Markdown 编辑器</title>
+<link rel="stylesheet" href="/static/md/md.css">
+<link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">墨</div>
+      <div><div class="brand-name">墨核</div><div class="brand-sub">Markdown 编辑器</div></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="backBtn">← 返回</button>
+    <div class="menu">
+      <button class="ghost-btn" id="importConvBtn">导入对话 <span class="caret">▾</span></button>
+      <div class="pop hidden" id="convPop"></div>
+    </div>
+    <button class="ghost-btn" id="saveNoteBtn">保存为笔记</button>
+    <div class="menu">
+      <button class="ghost-btn" id="notesBtn">笔记 <span class="caret">▾</span></button>
+      <div class="pop hidden" id="notesPop">
+        <input class="field" id="noteName" placeholder="笔记名称，如：我的草稿">
+        <button class="btn-primary" id="noteSaveNow">保存到笔记</button>
+        <div class="note-list" id="noteList"></div>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="btn-primary" id="exportBtn">导出 <span class="caret">▾</span></button>
+      <div class="pop hidden" id="exportPop">
+        <div data-fmt="md">Markdown (.md)</div>
+        <div data-fmt="txt">纯文本 (.txt)</div>
+        <div data-fmt="html">网页 (.html)</div>
+        <div data-fmt="docx">Word (.docx)</div>
+        <div data-fmt="xlsx">表格 (.xlsx)</div>
+        <div data-fmt="pdf">PDF (.pdf)</div>
+        <div data-fmt="png">长图 (.png)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <button data-act="h1">H1</button>
+    <button data-act="h2">H2</button>
+    <button data-act="h3">H3</button>
+    <span class="tsep"></span>
+    <button data-act="bold">B</button>
+    <button data-act="italic">I</button>
+    <button data-act="strike">S</button>
+    <span class="tsep"></span>
+    <button data-act="ul">• 列表</button>
+    <button data-act="ol">1. 列表</button>
+    <button data-act="quote">❝ 引用</button>
+    <span class="tsep"></span>
+    <button data-act="code">`代码`</button>
+    <button data-act="codeblock">代码块</button>
+    <span class="tsep"></span>
+    <button data-act="link">🔗 链接</button>
+    <button data-act="img">🖼 图片</button>
+    <button data-act="table">▦ 表格</button>
+    <button data-act="hr">— 分隔线</button>
+    <span class="tsep"></span>
+    <button data-act="layout">⤢ 布局</button>
+  </div>
+
+  <div class="main" id="main">
+    <textarea id="editor" placeholder="在这里用 Markdown 写作，右侧实时预览…（拖拽 .md / .txt 文件到此处可导入）"></textarea>
+    <div class="gutter" id="gutter"></div>
+    <div id="preview"></div>
+  </div>
+
+  <div class="statusbar">
+    <span><span class="dot" id="saveDot"></span> <span id="saveState">已自动保存</span></span>
+    <span id="charCount">0 字</span>
+    <span id="aiState"></span>
+    <div class="spacer" style="flex:1"></div>
+    <span style="color:var(--txt-3)">选中文字后点下方 AI 按钮可润色 / 总结 / 翻译</span>
+  </div>
+
+  <div class="ai-bar" id="aiBar">
+    <span class="ai-label">AI：</span>
+    <button data-ai="polish">✨ 润色</button>
+    <button data-ai="summarize">📌 总结</button>
+    <button data-ai="translate">🌐 翻译</button>
+    <button data-ai="continue">➡️ 续写</button>
+    <button data-ai="expand">📝 扩充</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/static/vendor/katex/katex.min.js"></script>
+<script src="/static/vendor/highlight.min.js"></script>
+<script src="/static/vendor/html2canvas.min.js"></script>
+<script src="/static/md/md.js"></script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>墨核 AI · 桌面智能助手</title>
+<link rel="icon" href="/static/icon.png" type="image/png">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/vendor/atom-one-dark.min.css">
+<link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
+</head>
+<body>
+<div id="app">
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="brand">
+      <img src="/static/icon.png" class="logo" alt="墨核">
+      <div class="brand-text">
+        <div class="brand-name">墨核 AI</div>
+        <div class="brand-sub">桌面智能助手 · v1.1</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="status"><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">本地引擎</span></div>
+      <select id="profileSel" class="ghost-btn" title="切换/新建用户配置"></select>
+      <button class="ghost-btn" id="settingsBtn" title="设置（大模型/绘图/视觉 API）"><i class="ic" data-ic="settings"></i>设置</button>
+      <button class="ghost-btn" id="newChatBtn"><i class="ic" data-ic="plus"></i>新对话</button>
+      <button class="ghost-btn" onclick="location.href='/md'" title="Markdown 编辑器（双栏预览 / 多格式导出 / AI 润色）">📝 编辑器</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- 左侧栏 -->
+    <aside class="sidebar">
+      <div class="side-section">
+        <div class="side-title">对话</div>
+        <div class="conv-search"><input id="convSearch" placeholder="搜索对话…"></div>
+        <div id="convList" class="conv-list"></div>
+      </div>
+      <div class="side-section">
+        <div class="side-title">功能直达</div>
+        <div class="nav-grid">
+          <button class="nav-item" data-panel="write"><i class="ic" data-ic="write"></i>写作</button>
+          <button class="nav-item" data-panel="image"><i class="ic" data-ic="image"></i>AI 生图</button>
+          <button class="nav-item" data-panel="prompt"><i class="ic" data-ic="prompt"></i>提示词</button>
+          <button class="nav-item" data-panel="memory"><i class="ic" data-ic="memory"></i>记忆</button>
+          <button class="nav-item" data-panel="knowledge"><i class="ic" data-ic="knowledge"></i>知识库</button>
+          <button class="nav-item" data-panel="skills"><i class="ic" data-ic="skills"></i>技能</button>
+          <button class="nav-item" data-panel="terminal"><i class="ic" data-ic="terminal"></i>终端</button>
+          <button class="nav-item" data-panel="code"><i class="ic" data-ic="code"></i>代码</button>
+          <button class="nav-item" data-panel="agent"><i class="ic" data-ic="agent"></i>Agent</button>
+          <button class="nav-item" data-panel="fun"><i class="ic" data-ic="fun"></i>离谱玩法</button>
+          <button class="nav-item" data-panel="ollama"><i class="ic" data-ic="server"></i>本地模型</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 中间：对话主界面 -->
+    <main class="chat">
+      <div class="chat-head">
+        <span id="chatTitle">新的对话</span>
+        <select id="sessionModel" class="head-btn" title="为本对话单独选择模型（覆盖全局设置）">
+          <option value="">模型：默认</option>
+          <option value="gpt-4o-mini">gpt-4o-mini</option>
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4o-latest">gpt-4o-latest</option>
+          <option value="deepseek-chat">deepseek-chat</option>
+          <option value="moonshot-v1-8k">moonshot-v1-8k</option>
+          <option value="qwen-plus">qwen-plus</option>
+          <option value="llama3">llama3</option>
+        </select>
+        <span class="chat-hint">主界面 · 全能对话</span>
+        <div class="export-wrap">
+          <button class="head-btn" id="exportBtn"><i class="ic" data-ic="export"></i>导出 ▾</button>
+          <div class="export-menu hidden" id="exportMenu">
+            <div data-exp="docx">Word 文档</div>
+            <div data-exp="md">Markdown</div>
+            <div data-exp="pdf">PDF</div>
+            <div data-exp="wechat">公众号 HTML</div>
+            <div data-exp="longimg">拼成长图（PNG）</div>
+            <div data-exp="xmind">XMind 思维导图</div>
+          </div>
+        </div>
+      </div>
+      <div id="messages" class="messages">
+        <div class="welcome">
+          <img src="/static/icon.png" class="welcome-logo" alt="墨核">
+          <h1>我是墨核 AI</h1>
+          <p class="welcome-sub">你的桌面智能助手 —— 本地私有、数据留本机；聊天、问答、搜资料、写作、生图、写代码、跑命令，一个窗口全搞定。</p>
+          <div class="welcome-cards">
+            <button class="wcard" data-cmd="你都能帮我做什么？"><i class="ic" data-ic="chat"></i><b>全能助手</b><small>我能帮你做哪些事？</small></button>
+            <button class="wcard" data-cmd="搜索今天 AI 领域的最新资讯"><i class="ic" data-ic="globe"></i><b>联网搜索</b><small>搜最新资讯 / 查资料</small></button>
+            <button class="wcard" data-cmd="写一段都市悬疑短篇，主角叫林默"><i class="ic" data-ic="pen"></i><b>写小说</b><small>短篇 / 剧本 / 脚本</small></button>
+            <button class="wcard" data-cmd="帮我写一篇公众号文章：如何高效阅读"><i class="ic" data-ic="doc"></i><b>写文章</b><small>公众号 / 干货文</small></button>
+            <button class="wcard" data-cmd="画一张赛博朋克封面"><i class="ic" data-ic="image"></i><b>AI 生图</b><small>封面 / 配图</small></button>
+            <button class="wcard" data-cmd="把这段英文翻译成中文：Hello, how are you?"><i class="ic" data-ic="translate"></i><b>翻译</b><small>中英互译</small></button>
+          </div>
+        </div>
+      </div>
+      <div class="chips">
+        <button class="chip" data-cmd="你都能帮我做什么？">全能助手</button>
+        <button class="chip" data-cmd="搜索今天 AI 领域的最新资讯">联网搜索</button>
+        <button class="chip" data-cmd="写一段都市悬疑短篇，主角叫林默">写小说</button>
+        <button class="chip" data-cmd="帮我写一篇公众号文章：如何高效阅读">写文章</button>
+        <button class="chip" data-cmd="画一张赛博朋克封面">AI 生图</button>
+        <button class="chip" data-cmd="把这段英文翻译成中文：Hello, how are you?">翻译</button>
+      </div>
+      <!-- 改动12：会话级产物缩略图条（可折叠，按对话切换） -->
+      <div class="art-strip" id="artStrip" style="display:none">
+        <button class="art-toggle" id="artToggle" title="折叠/展开产物">📦 产物 <span id="artCount">0</span></button>
+        <div class="art-thumbs" id="artThumbs"></div>
+      </div>
+      <div class="input-bar">
+        <div class="input-wrap">
+          <button class="io-btn" id="voiceBtn" title="语音输入"><i class="ic" data-ic="voice"></i></button>
+          <button class="io-btn" id="visionBtn" title="发送图片（视觉理解）"><i class="ic" data-ic="vision"></i></button>
+          <textarea id="input" rows="1" placeholder="对我说点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+          <button id="sendBtn" title="发送"><i class="ic" data-ic="send"></i></button>
+        </div>
+      </div>
+      <!-- 隐藏文件输入 -->
+      <input type="file" id="visionInput" accept="image/*" hidden>
+      <input type="file" id="docInput" accept=".pdf,.docx,.txt,.md,.csv" hidden>
+      <input type="file" id="skillImport" accept=".json" hidden>
+    </main>
+
+    <!-- 右侧：功能面板 -->
+    <aside class="panel hidden" id="panel">
+      <div class="panel-head" id="panelHead">
+        <div id="panelTitle">面板</div>
+        <div style="display:flex;align-items:center;gap:2px">
+          <button id="panelMax" title="全屏覆盖聊天区"><i class="ic" data-ic="maximize"></i></button>
+          <button id="panelClose"><i class="ic" data-ic="close"></i></button>
+        </div>
+      </div>
+      <div class="panel-body" id="panelBody"></div>
+    </aside>
+  </div>
+
+  <!-- 首跑引导：未配置大模型时自动出现 -->
+  <div class="modal-mask hidden" id="onboardMask">
+    <div class="modal" id="onboardModal">
+      <img src="/static/icon.png" class="ob-logo" alt="墨核">
+      <h2>欢迎使用 墨核 AI Studio (InkCore)</h2>
+      <p class="ob-sub">本地私有 · 数据留本机。三种方式开始，任选其一：</p>
+      <div class="ob-opts">
+        <button class="ob-opt" id="obEmbedded">
+          <i class="ic" data-ic="agent"></i>
+          <div class="ob-t">🚀 本地内置模型（推荐）</div>
+          <div class="ob-d">零 Key · 离线 · 免装 Ollama · 首次自动下载约 1.1GB</div>
+        </button>
+        <button class="ob-opt" id="obOllama">
+          <i class="ic" data-ic="server"></i>
+          <div class="ob-t">用 Ollama 本地模型</div>
+          <div class="ob-d">零 Key · 离线 · 需先装 Ollama</div>
+        </button>
+        <button class="ob-opt" id="obKey">
+          <i class="ic" data-ic="settings"></i>
+          <div class="ob-t">填 OpenAI / DeepSeek Key</div>
+          <div class="ob-d">用云端大模型，质量更高</div>
+        </button>
+        <button class="ob-opt" id="obLater">
+          <i class="ic" data-ic="chat"></i>
+          <div class="ob-t">稍后再说（先用本地模板）</div>
+          <div class="ob-d">不配也能体验界面与基础写作</div>
+        </button>
+      </div>
+      <div class="ob-msg" id="obMsg"></div>
+      <div class="ob-foot">「本地内置模型」已把推理引擎打进软件，无需安装 Ollama；首次使用会下载一个量化模型（约 1.1GB，之后永久离线）。</div>
+    </div>
+  </div>
+
+  <!-- 执行前确认：终端 / 代码真实运行于本机时弹出 -->
+  <div class="modal-mask hidden" id="confirmMask">
+    <div class="modal" style="width:min(440px,100%)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <i class="ic" data-ic="warning" style="width:22px;height:22px;color:var(--warn)"></i>
+        <h2 id="confirmTitle" style="font-size:17px">确认执行</h2>
+      </div>
+      <p id="confirmDetail" style="font-size:13px;color:var(--txt-2);line-height:1.7;margin-bottom:14px"></p>
+      <pre id="confirmCmd" style="background:#0b0d12;border:1px solid var(--line);border-radius:10px;padding:11px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#d6e6ff;white-space:pre-wrap;word-break:break-all;max-height:160px;overflow:auto;margin-bottom:16px"></pre>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn sec" id="confirmNo" style="width:auto;padding:9px 16px">取消</button>
+        <button class="btn" id="confirmYes" style="width:auto;padding:9px 16px;background:linear-gradient(135deg,var(--warn),#ff9f43);box-shadow:none">仍要执行</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置：弹窗 tab 页 -->
+  <div class="modal-mask hidden" id="settingsMask">
+    <div class="modal settings-modal" id="settingsModal">
+      <div class="settings-head">
+        <div class="settings-title"><i class="ic" data-ic="settings"></i> 设置</div>
+        <button class="settings-close" id="settingsClose"><i class="ic" data-ic="close"></i></button>
+      </div>
+      <div class="settings-tabs" id="settingsTabs">
+        <button class="settings-tab active" data-tab="provider">AI 提供商</button>
+        <button class="settings-tab" data-tab="params">参数</button>
+        <button class="settings-tab" data-tab="ollama">本地模型</button>
+        <button class="settings-tab" data-tab="appearance">外观</button>
+        <button class="settings-tab" data-tab="data">数据</button>
+        <button class="settings-tab" data-tab="about">关于</button>
+      </div>
+      <div class="settings-body" id="settingsBody"></div>
+      <div class="settings-foot">
+        <button class="btn" onclick="saveSettings()">保存设置</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/vendor/katex/katex.min.js"></script>
+<script src="/static/vendor/highlight.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

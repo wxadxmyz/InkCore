@@ -1,0 +1,167 @@
+# ============================================================
+#  墨核 AI Studio —— GitHub Actions 自动构建 Windows 发布包
+#  用法：
+#    1) 把代码推到 GitHub（公开仓库免费）
+#    2) 打 tag：  git tag v1.2.0 && git push --tags
+#    3) 本工作流自动在 Windows 云机器上：
+#         - 装 Python 3.11 + 依赖
+#         - PyInstaller 打包单文件 exe（dist\InkCore.exe）
+#         - InnoSetup 生成安装包（installer\InkCore_Setup_*.exe）
+#         - 额外打包绿色版  InkCore-win.zip
+#         - 额外打包源码版  InkCore-src.zip
+#         - 自动创建 GitHub Release 并附上四个产物
+#    4) 用户可直接访问固定链接下载：
+#         https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore-win.zip
+#         https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore-src.zip
+#  说明：模型权重不打进包（保持安装包仅几十 MB），首次使用由软件自动拉取。
+# ============================================================
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'                 # 推送 v1.2.0 这类 tag 时触发
+  workflow_dispatch:         # 也支持在 Actions 页手动触发
+
+permissions:
+  contents: write            # 需要写 Release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version from version.json
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Get-Content version.json | ConvertFrom-Json).version
+          Write-Output "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Build single-file exe (PyInstaller)
+        run: pyinstaller build.spec
+
+      - name: Build installer (InnoSetup)
+        id: inno
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          function Find-ISCC {
+            $cands = @(
+              (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+              (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 7\ISCC.exe"),
+              "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+              "C:\Program Files (x86)\Inno Setup 7\ISCC.exe"
+            )
+            foreach ($c in $cands) { if (Test-Path $c) { return $c } }
+            $f = Get-ChildItem "C:\Program Files (x86)","C:\Program Files" -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($f) { return $f.FullName }
+            return $null
+          }
+          if (-not (Find-ISCC)) {
+            Write-Host "从 GitHub Releases 拉取 Inno Setup 官方安装包 ..."
+            $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/jrsoftware/issrc/releases/latest" -Headers @{Authorization="Bearer $env:GH_TOKEN"}
+            $asset = $rel.assets | Where-Object { $_.name -like "innosetup-*-x64.exe" } | Select-Object -First 1
+            Write-Host ("下载: " + $asset.name + " -> " + $asset.browser_download_url)
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "$env:TEMP\is_setup.exe" -MaximumRedirection 10
+            Write-Host "静默安装 Inno Setup ..."
+            Start-Process "$env:TEMP\is_setup.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/CURRENTUSER" -Wait
+          }
+          $iscc = Find-ISCC
+          if (-not $iscc) {
+            Write-Host "::warning::ISCC 未能安装，跳过安装包（仍会发布单文件 exe）"
+            exit 0
+          }
+          Write-Host ("使用 ISCC: " + $iscc)
+          & $iscc installer.iss
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::warning::ISCC 编译失败，跳过安装包（仍会发布单文件 exe）"
+            exit 0
+          }
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item installer/InkCore_Setup_*.exe release/ -Force
+
+      # 可选：代码签名（消除 SmartScreen “未知发布者” 警告）
+      # 需先在仓库 Settings → Secrets 配置 CERT_BASE64 / CERT_PASSWORD，并把证书放进仓库
+      # - name: Sign exe
+      #   shell: pwsh
+      #   run: |
+      #     $b = [System.Convert]::FromBase64String("${{ secrets.CERT_BASE64 }}")
+      #     [IO.File]::WriteAllBytes("cert.pfx", $b)
+      #     & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" `
+      #       sign /fd SHA256 /f cert.pfx /p "${{ secrets.CERT_PASSWORD }}" `
+      #       /t http://timestamp.digicert.com dist\InkCore.exe
+
+      - name: Package portable ZIP (InkCore-win.zip)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+          # 绿色版内容：exe + 软件介绍 + README（让用户解压就知道怎么用）
+          New-Item -ItemType Directory -Force -Path release\portable
+          Copy-Item dist\InkCore.exe               release\portable\
+          Copy-Item 'packaging\软件介绍.txt'        release\portable\
+          Copy-Item README.md                      release\portable\
+          Compress-Archive -Path release\portable\* -DestinationPath release\InkCore-win.zip -Force
+
+      - name: Package source ZIP (InkCore-src.zip)
+        shell: pwsh
+        run: |
+          $exclude = @('.git', '__pycache__', 'build', 'dist', 'release', '*.zip', 'MoHeAI',
+                       '.venv', 'venv', 'env', 'node_modules', '_inkcore_dl', '_ui_gallery',
+                       '_dl', '_refs', '.idea', '.vscode', '*.log', 'Thumbs.db', '.DS_Store')
+          $files = Get-ChildItem -Force | Where-Object {
+            $name = $_.Name
+            $keep = $true
+            foreach ($pat in $exclude) {
+              if ($name -like $pat) { $keep = $false; break }
+            }
+            $keep
+          }
+          # 把软件介绍也放到源码包根目录一份，方便直接看到
+          Copy-Item 'packaging\软件介绍.txt' . -Force
+          Compress-Archive -Path ($files.FullName) -DestinationPath release\InkCore-src.zip -Force
+
+      - name: Upload artifacts (手动触发时也有产物可下)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: InkCore-windows
+          path: |
+            release/InkCore-win.zip
+            release/InkCore-src.zip
+            dist/InkCore.exe
+            installer/InkCore_Setup_*.exe
+
+      - name: Create GitHub Release and upload assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 墨核 AI Studio ${{ github.ref_name }}
+          body: |
+            ## 墨核 AI Studio ${{ github.ref_name }}
+            - **InkCore_Setup_${{ steps.ver.outputs.version }}.exe**：安装版，推荐大多数用户
+            - **InkCore.exe**：单文件版，双击即用（无需安装）
+            - **InkCore-win.zip**：免安装绿色版，解压即用，适合放 U 盘
+            - **InkCore-src.zip**：源码压缩包，可在 Python 环境直接运行
+            - 首次启动若选用「本地内置模型」，会自动下载约 1.1GB 量化权重，之后永久离线可用。
+          files: |
+            release/InkCore-win.zip
+            release/InkCore-src.zip
+            dist/InkCore.exe
+            installer/InkCore_Setup_*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

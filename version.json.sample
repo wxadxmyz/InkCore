@@ -1,0 +1,5 @@
+{
+  "version": "1.0.0",
+  "notes": "本次更新：语义路由 + 澄清反问、真 Agent（LLM 选工具并合成）、技能市场、自动更新检查、知识库 RAG、视觉理解、语音输入、多格式导出。",
+  "url": "https://github.com/wxadxmyz/InkCore/releases/download/v1.0.0/InkCore_Setup_1.0.0.exe"
+}

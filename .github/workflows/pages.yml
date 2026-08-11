@@ -1,0 +1,46 @@
+# ============================================================
+#  墨核 AI Studio —— GitHub Pages 自动部署
+#  用法：
+#    1) 确保仓库 Settings → Pages → Source 选择 "GitHub Actions"
+#    2) 把代码推到 main 分支
+#    3) 本工作流自动把 docs/ 目录部署到 https://wxadxmyz.github.io/InkCore/
+#  说明：docs/ 目录由 tools/build_gallery.py 生成，不要手动修改。
+# ============================================================
+name: Deploy Gallery to Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

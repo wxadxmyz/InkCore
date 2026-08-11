@@ -1,0 +1,39 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.manifest
+*.spec.bak
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+env/
+
+# ===== 运行时用户数据（在 ~/MoHeAI，不应进仓库）=====
+MoHeAI/
+
+# ===== 日志 / 临时 =====
+*.log
+
+# ===== 操作系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ===== Node / Playwright（仅本地验证用）=====
+node_modules/
+
+# ===== 临时产物 / 发布产物 / 截图 =====
+_ui_gallery/
+_dl/
+_refs/
+*.zip
+publish.ps1
+publish.sh
+.cloudstudio
+_inkcore_dl/
