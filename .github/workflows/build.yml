@@ -56,20 +56,22 @@ jobs:
       - name: Build installer (Inno Setup, 固定版本)
         id: inno
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $dirs = @("C:\Program Files (x86)\Inno Setup 7", "C:\Program Files\Inno Setup 7", "C:\Program Files (x86)\Inno Setup 6", "C:\Program Files\Inno Setup 6", "$env:TEMP\is7")
-          $iscc = Get-ChildItem $dirs -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $iscc) {
-            Write-Host "下载固定版本 Inno Setup 7.0.2 ..."
-            $ok = $false
-            try { gh release download is-7_0_2 -R jrsoftware/issrc -p "innosetup-7.0.2-x64.exe" --dir "$env:TEMP" 2>&1; if (Test-Path "$env:TEMP\innosetup-7.0.2-x64.exe") { $ok = $true } } catch { Write-Host "gh 失败, 回退直链" }
-            if (-not $ok) { Invoke-WebRequest -Uri "https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe" -OutFile "$env:TEMP\innosetup-7.0.2-x64.exe" -MaximumRedirection 10 }
-            if (Test-Path "$env:TEMP\innosetup-7.0.2-x64.exe") { Write-Host "静默安装到 $env:TEMP\is7 ..."; Start-Process "$env:TEMP\innosetup-7.0.2-x64.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/CURRENTUSER","/DIR=$env:TEMP\is7" -Wait }
-            $iscc = Get-ChildItem $dirs -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          $ErrorActionPreference = "Continue"
+          $exe = "$env:RUNNER_TEMP\innosetup-7.0.2-x64.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Host "下载 Inno Setup 7.0.2 (官方公共 release, 无需鉴权) ..."
+            curl.exe -L -o $exe "https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe"
           }
-          if (-not $iscc) { Write-Host "::error::ISCC 未能获取，安装包构建失败"; exit 1 }
+          if (-not (Test-Path $exe)) { Write-Host "::error::下载 Inno Setup 失败"; exit 1 }
+          $isDir = "C:\IS7"
+          if (-not (Test-Path "$isDir\ISCC.exe")) {
+            Write-Host ("静默安装到 " + $isDir + " ...")
+            Start-Process $exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/CURRENTUSER","/DIR=$isDir" -Wait
+          }
+          $cands = @($isDir, "C:\Program Files (x86)\Inno Setup 7", "C:\Program Files\Inno Setup 7", "C:\Program Files (x86)\Inno Setup 6", "C:\Program Files\Inno Setup 6", "$env:LOCALAPPDATA\Programs\Inno Setup 7", "$env:LOCALAPPDATA\Programs\Inno Setup 6")
+          $iscc = $cands | ForEach-Object { Get-ChildItem $_ -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue } | Select-Object -First 1
+          if (-not $iscc) { Write-Host "::error::未找到 ISCC.exe，安装包构建失败"; exit 1 }
           Write-Host ("使用 ISCC: " + $iscc.FullName)
           & $iscc.FullName installer.iss
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::ISCC 编译 installer.iss 失败"; exit 1 }
