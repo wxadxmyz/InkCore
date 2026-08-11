@@ -53,52 +53,31 @@ jobs:
       - name: Build single-file exe (PyInstaller)
         run: pyinstaller build.spec
 
-      - name: Build installer (InnoSetup)
+      - name: Build installer (Inno Setup, 固定版本)
         id: inno
-        continue-on-error: true
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          function Find-ISCC {
-            $cands = @(
-              (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
-              (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 7\ISCC.exe"),
-              "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-              "C:\Program Files (x86)\Inno Setup 7\ISCC.exe"
-            )
-            foreach ($c in $cands) { if (Test-Path $c) { return $c } }
-            $f = Get-ChildItem "C:\Program Files (x86)","C:\Program Files" -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($f) { return $f.FullName }
-            return $null
-          }
-          if (-not (Find-ISCC)) {
-            Write-Host "下载并安装 Inno Setup (固定官方链接) ..."
-            $url = "https://github.com/jrsoftware/issrc/releases/download/v7.0.2/innosetup-7.0.2-x64.exe"
-            try {
-              Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\is_setup.exe" -MaximumRedirection 10
-            } catch {
-              Write-Host "固定链接失败, 回退 choco ..."
-              choco install innosetup -y 2>$null
-            }
-            if (Test-Path "$env:TEMP\is_setup.exe") {
-              Write-Host "静默安装 Inno Setup ..."
-              Start-Process "$env:TEMP\is_setup.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/CURRENTUSER" -Wait
-            }
-          }
-          $iscc = Find-ISCC
+          $dirs = @("C:\Program Files (x86)\Inno Setup 7", "C:\Program Files\Inno Setup 7", "C:\Program Files (x86)\Inno Setup 6", "C:\Program Files\Inno Setup 6", "$env:TEMP\is7")
+          $iscc = Get-ChildItem $dirs -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $iscc) {
-            Write-Host "::warning::ISCC 未能安装，跳过安装包（仍会发布单文件 exe）"
-            exit 0
+            Write-Host "下载固定版本 Inno Setup 7.0.2 ..."
+            $ok = $false
+            try { gh release download is-7_0_2 -R jrsoftware/issrc -p "innosetup-7.0.2-x64.exe" --dir "$env:TEMP" 2>&1; if (Test-Path "$env:TEMP\innosetup-7.0.2-x64.exe") { $ok = $true } } catch { Write-Host "gh 失败, 回退直链" }
+            if (-not $ok) { Invoke-WebRequest -Uri "https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe" -OutFile "$env:TEMP\innosetup-7.0.2-x64.exe" -MaximumRedirection 10 }
+            if (Test-Path "$env:TEMP\innosetup-7.0.2-x64.exe") { Write-Host "静默安装到 $env:TEMP\is7 ..."; Start-Process "$env:TEMP\innosetup-7.0.2-x64.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/CURRENTUSER","/DIR=$env:TEMP\is7" -Wait }
+            $iscc = Get-ChildItem $dirs -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           }
-          Write-Host ("使用 ISCC: " + $iscc)
-          & $iscc installer.iss
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::warning::ISCC 编译失败，跳过安装包（仍会发布单文件 exe）"
-            exit 0
-          }
+          if (-not $iscc) { Write-Host "::error::ISCC 未能获取，安装包构建失败"; exit 1 }
+          Write-Host ("使用 ISCC: " + $iscc.FullName)
+          & $iscc.FullName installer.iss
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::ISCC 编译 installer.iss 失败"; exit 1 }
+          $out = Get-ChildItem installer/InkCore_Setup_*.exe | Select-Object -First 1
+          if (-not $out) { Write-Host "::error::未生成 installer/InkCore_Setup_*.exe"; exit 1 }
           New-Item -ItemType Directory -Force -Path release | Out-Null
-          Copy-Item installer/InkCore_Setup_*.exe release/ -Force
+          Copy-Item $out.FullName release/ -Force
+          Write-Host ("已生成安装包：" + $out.FullName)
 
       # 可选：代码签名（消除 SmartScreen “未知发布者” 警告）
       # 需先在仓库 Settings → Secrets 配置 CERT_BASE64 / CERT_PASSWORD，并把证书放进仓库
@@ -156,6 +135,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: 墨核 AI Studio ${{ github.ref_name }}
+          fail_on_unmatched_files: false
           body: |
             ## 墨核 AI Studio ${{ github.ref_name }}
             - **InkCore_Setup_${{ steps.ver.outputs.version }}.exe**：安装版，推荐大多数用户
