@@ -10,6 +10,7 @@
     python3 tools/build_gallery.py
 """
 import base64
+import json
 import os
 import pathlib
 
@@ -17,7 +18,29 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SHOTS = ROOT / "docs" / "shots"
 
 REPO = "wxadxmyz/InkCore"
-VERSION = "v1.0.0"
+
+
+def _read_version():
+    """版本号动态读 version.json，避免画廊与发布版本脱节；读取失败回退到 CHANGELOG。"""
+    vf = ROOT / "version.json"
+    try:
+        v = json.loads(vf.read_text(encoding="utf-8")).get("version", "")
+        if v:
+            return "v" + str(v).lstrip("v")
+    except Exception:
+        pass
+    try:
+        import re
+        txt = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        m = re.search(r"##\s+v?(\d+\.\d+\.\d+)", txt)
+        if m:
+            return "v" + m.group(1)
+    except Exception:
+        pass
+    return "v1.0.0"
+
+
+VERSION = _read_version()
 REL = f"https://github.com/{REPO}/releases/latest/download"
 
 # ---------------------------------------------------------------- 截图元数据
