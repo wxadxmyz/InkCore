@@ -3,7 +3,7 @@
 ;  用法：
 ;   1) 先用 build_windows.bat 生成 dist\InkCore.exe
 ;   2) 用 Inno Setup Compiler 打开本文件并编译
-;   3) 产物： installer\InkCore_Setup_<version>.exe（版本号由 build.yml 从 version.json 注入）
+;   3) 产物： installer\InkCore-Setup.exe（文件名固定，版本写进 AppVersion 元数据）
 ;  说明：安装包不带签名，分发前建议用代码签名证书签名（见 README）。
 ; ============================================================
 #define MyAppName "墨核 AI Studio (InkCore)"
@@ -21,7 +21,7 @@ AppPublisherURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 OutputDir=installer
-OutputBaseFilename=InkCore_Setup_{#MyAppVersion}
+OutputBaseFilename=InkCore-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

@@ -146,7 +146,7 @@ jobs:
           fail_on_unmatched_files: false
           body: |
             ## 墨核 AI Studio ${{ github.ref_name }}
-            - **InkCore_Setup_${{ steps.ver.outputs.version }}.exe**：安装版，推荐大多数用户
+            - **InkCore-Setup.exe**：安装版（v${{ steps.ver.outputs.version }}），推荐大多数用户
             - **InkCore.exe**：单文件版，双击即用（无需安装）
             - **InkCore-win.zip**：免安装绿色版，解压即用，适合放 U 盘
             - **InkCore-src.zip**：源码压缩包，可在 Python 环境直接运行
@@ -155,7 +155,9 @@ jobs:
             release/InkCore-win.zip
             release/InkCore-src.zip
             dist/InkCore.exe
+            installer/InkCore-Setup.exe
             installer/InkCore_Setup_*.exe
             release/InkCore_Setup_*.exe
+            release/InkCore-Setup.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

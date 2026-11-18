@@ -1,5 +1,5 @@
 {
   "version": "1.2.0",
   "notes": "墨核 AI Studio v1.2.0 ReAct 版：新增多轮「规划→执行→观察→再规划」循环，模型自主决定继续调工具还是给出最终答案，失败自动换工具自愈；步骤间变量传递、max_steps/重复调用/预算护栏、1 秒内停止、checkpoint 断点续跑；新增 SSE 实时事件流（工具调用/结果/进度可视化）与前端任务清单时间线。最终结果随 done 事件一次返回，不重复执行 Agent。",
-  "url": "https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore_Setup_1.2.0.exe"
+  "url": "https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore-Setup.exe"
 }
