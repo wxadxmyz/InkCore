@@ -22,6 +22,10 @@ from core.security.guard import safe_subpath
 from core.security import analyze_command as _analyze_command, merge_policy as _merge_policy, decide as _sec_decide, AuditLog as _AuditLog
 from core.agent.tool_loop import run_agent
 from core.agent.react import ReActRunner, ReactConfig
+# V2 生态内核（M6）：MCP 客户端 / Skill 包 / 子 Agent 并行
+from core.mcp import client_from_config as _mcp_client_from_config, to_tool_specs as _mcp_to_tool_specs
+from core.skills import SkillPack as _SkillPack, parse_skill_md as _parse_skill_md, validate_skill_md as _validate_skill_md, export_skill_zip as _export_skill_zip, load_skill_zip as _load_skill_zip
+from core.agent.subagent import SubTask as _SubTask, run_parallel as _run_parallel, summarize_for_parent as _summarize_subresults
 # V2 上下文内核（M4）：token 预算 / 结构化记忆 / 混合检索
 from core.context import (
     assemble_context as _assemble_context, ContextBudget,
@@ -85,10 +89,12 @@ DEFAULT_CONFIG = {
     "context": {"engine": "budget", "summarize_older": True, "citation": True},  # M4 上下文工程开关
     "agent": {"use_tool_calls": True, "use_react": True, "max_steps": 12,
               "max_tool_calls": 24, "budget_chars": 60000, "tool_timeout_default": 20},  # M2 工具协议 + M3 ReAct 开关
+    "mcp": {"servers": []},   # M6：外部 MCP Server 列表（{name,transport,command|url,...}）
+    "subagent": {"max_workers": 3, "per_task_timeout": 120},  # M6：子 Agent 并行参数
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "1.4.0"   # 自动更新比对用
+APP_VERSION = "2.0.0"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
@@ -2037,6 +2043,129 @@ def api_audit():
     session = request.args.get("session", "")
     rows = AUDIT_LOG.replay(session)
     return jsonify({"ok": True, "count": len(rows), "events": rows[-500:]})
+
+# ---------- MCP 生态（M6） ----------
+_MCP_CLIENTS = {}   # name -> McpClient，进程内复用
+
+def _refresh_mcp_registry():
+    """把配置里的 MCP Server 工具注入全局 Registry（本地工具保持不动）。"""
+    global TOOL_REGISTRY
+    servers = config.get("mcp", {}).get("servers", []) or []
+    found = []
+    for scfg in servers:
+        name = scfg.get("name") or "mcp"
+        try:
+            cli = _mcp_client_from_config(scfg)
+            specs = _mcp_to_tool_specs(cli)
+            _MCP_CLIENTS[name] = cli
+            found.extend(specs)
+        except Exception as e:
+            AUDIT_LOG.record(tool="mcp_connect", risk="network", arguments={"server": name},
+                             ok=False, error=str(e))
+    # 用注入的本地实现重建基础注册表，再叠加 MCP 工具
+    base = build_registry(_TOOL_IMPLS)
+    for spec in found:
+        try:
+            base.register(spec)
+        except ValueError:
+            pass
+    TOOL_REGISTRY = base
+    return [s.name for s in found]
+
+@app.route("/api/mcp/servers", methods=["GET"])
+def api_mcp_servers():
+    """列出已配置的 MCP Server 及其工具（按需连接）。"""
+    servers = config.get("mcp", {}).get("servers", []) or []
+    out = []
+    for scfg in servers:
+        name = scfg.get("name") or "mcp"
+        entry = {"name": name, "transport": scfg.get("transport", "stdio"), "tools": []}
+        try:
+            cli = _MCP_CLIENTS.get(name) or _mcp_client_from_config(scfg)
+            entry["tools"] = [t.name for t in cli.list_tools()]
+            _MCP_CLIENTS[name] = cli
+            entry["ok"] = True
+        except Exception as e:
+            entry["ok"] = False
+            entry["error"] = str(e)
+        out.append(entry)
+    return jsonify({"ok": True, "servers": out})
+
+@app.route("/api/mcp/refresh", methods=["POST"])
+def api_mcp_refresh():
+    """重新连接所有 MCP Server 并把工具注入 Agent 注册表。"""
+    try:
+        names = _refresh_mcp_registry()
+        return jsonify({"ok": True, "tools": names, "total": len(TOOL_REGISTRY)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+# ---------- Skill 包（M6） ----------
+@app.route("/api/skill/validate", methods=["POST"])
+def api_skill_validate():
+    """校验 SKILL.md 文本。"""
+    text = (request.json or {}).get("text", "")
+    return jsonify(_validate_skill_md(text))
+
+@app.route("/api/skill/import", methods=["POST"])
+def api_skill_import():
+    """导入 .zip Skill 包，落到 skills.json。"""
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "未上传文件"}), 400
+    try:
+        pack = _load_skill_zip(f.read())
+        skills.append({"id": f"skill_{uuid.uuid4().hex[:8]}", "name": pack.name,
+                       "desc": pack.description, "content": pack.to_prompt(),
+                       "version": pack.version, "source": "imported"})
+        _save(DATA_HOME / "skills.json", skills)
+        return jsonify({"ok": True, "skill": pack.to_dict()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+@app.route("/api/skill/export", methods=["POST"])
+def api_skill_export():
+    """把一个已安装 skill 导出成 .zip 供下载/分享。"""
+    d = request.json or {}
+    sid = d.get("id")
+    skill = next((s for s in skills if s.get("id") == sid), None)
+    if not skill:
+        return jsonify({"ok": False, "error": "未找到 skill"}), 404
+    try:
+        pack = _SkillPack(name=skill.get("name", "skill"),
+                         description=skill.get("desc", ""),
+                         instructions=skill.get("content", ""),
+                         version=skill.get("version", "1.0.0"))
+        dest = OUT / f"skill_{skill.get('id','export')}.zip"
+        _export_skill_zip(pack, dest)
+        return send_file(str(dest), mimetype="application/zip", as_attachment=True,
+                         download_name=f"{pack.name}.zip")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+# ---------- 子 Agent 并行（M6） ----------
+@app.route("/api/subagent", methods=["POST"])
+def api_subagent():
+    """把多个子任务并行跑（各自独立上下文），只回传结论摘要。"""
+    d = request.json or {}
+    goals = d.get("goals") or []
+    if not isinstance(goals, list) or not goals:
+        return jsonify({"ok": False, "error": "goals 必须是非空数组"}), 400
+    cfg = config.get("subagent", {})
+    tasks = [_SubTask(goal=str(g.get("goal", g)) if isinstance(g, dict) else str(g),
+                      context=str(g.get("context", "")) if isinstance(g, dict) else "") for g in goals]
+
+    def factory(goal, context):
+        # 每个子任务构造独立 runner；上下文把背景拼进目标，工具轨迹留在子上下文内
+        ctx_goal = f"{context}\n\n任务：{goal}" if context else goal
+        return ReActRunner(ctx_goal, TOOL_REGISTRY, config.get("llm"))
+
+    results = _run_parallel(tasks, runner_factory=factory,
+                            max_workers=int(cfg.get("max_workers", 3)),
+                            per_task_timeout=int(cfg.get("per_task_timeout", 120)))
+    return jsonify({"ok": True,
+                    "results": [r.to_dict() for r in results],
+                    "summary": _summarize_subresults(results)})
 
 # ---------- 数据备份 / 恢复 ----------
 @app.route("/api/backup")

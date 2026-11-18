@@ -1,5 +1,27 @@
 # 更新日志
 
+## v2.0.0 — 生态版（2026-11-19）
+
+里程碑 M6 收官，从"会干活的 Agent"升级为"可外接生态的平台"，版本正式跨入 2.0。
+
+### MCP 客户端
+- 新增 `core/mcp/client.py`：JSON-RPC 2.0 最小客户端，支持 stdio（本地子进程）与 Streamable-HTTP 两种传输。
+- `initialize → tools/list → tools/call` 全链路；远程工具用 `mcp_<server>_<name>` 前缀转成墨核 ToolSpec，直接注册进 Agent 注册表——模型无需感知工具来自本地还是外部 Server。
+- 新增 `GET /api/mcp/servers`、`POST /api/mcp/refresh`；配置写在 `config.mcp.servers`。
+
+### Skill 包规范
+- 新增 `core/skills/pack.py`：`SKILL.md`（frontmatter 元数据 + Markdown 指令 + 可选 scripts/references）。
+- 纯标准库解析 YAML 风格 frontmatter，不引入 PyYAML；支持目录/zip 导入与 zip 导出，跨机器分享。
+- 新增 `POST /api/skill/validate`、`/api/skill/import`、`/api/skill/export`。
+
+### 子 Agent / 并行
+- 新增 `core/agent/subagent.py`：多任务在线程池并行执行，各自独立上下文，单任务超时/失败互相隔离。
+- 只把结论摘要回传主 Agent（`summarize_for_parent`），工具轨迹留在子上下文，主对话不被淹没。
+- 新增 `POST /api/subagent`；配置写在 `config.subagent`。
+
+### 验证
+- py_compile / ruff 全绿；pytest **129 条全过**（新增 M6 16 条，MCP/Skill/子Agent 全用 mock，不依赖真实 Server/网络）。
+
 ## v1.4.0 — 安全版（2026-11-19）
 
 把"敢不敢开放给外人用"的底线补齐——M5 给工具调用装上白名单、审批与审计。

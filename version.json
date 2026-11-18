@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
-  "notes": "墨核 AI Studio v1.4.0 安全版：终端命令改用 shlex 分词 + 只读白名单 + 危险参数拦截（堵住 rm -rf 多空格、base64 解码执行、&& 链接、curl|sh、路径穿越、编码混淆等 8 类绕过）；代码执行隔离到临时工作区并加超时；工具调用 append-only 审计日志（/api/audit 可回放）；工具按 read/write/exec/network 分级审批，策略可配置降级；未开鉴权时禁止绑定非回环地址。",
+  "version": "2.0.0",
+  "notes": "墨核 AI Studio v2.0.0 生态版：正式跨入 2.0。接入 MCP 客户端（stdio/HTTP 两种传输，外部工具直接注册进 Agent 注册表）；新增 Skill 包规范（SKILL.md 元数据+指令+可选脚本，支持 zip 导入导出分享）；新增子 Agent 并行（长任务拆到独立上下文，只回传结论摘要）；SSE 事件协议定稿。新增 MCP/Skill/子Agent 三组 API。",
   "url": "https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore-Setup.exe"
 }
