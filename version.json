@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
-  "notes": "墨核 AI Studio 1.0.0：面板统一 400px + 全屏覆盖按钮，聊天自动唤起代码/Agent/终端并全屏，离谱玩法支持自建与导入导出，新增 SiliconFlow / OpenRouter 聚合供应商，每供应商独立保存 API Key，Key 可一键继承给生图与视觉，Ollama 并入设置页，会话产物条实时展示本轮产物，所有工作面板新增空状态引导。",
-  "url": "https://github.com/wxadxmyz/InkCore/releases/download/v1.0.0/InkCore_Setup_1.0.0.exe"
+  "version": "1.0.1",
+  "notes": "墨核 AI Studio v1.0.1 止血版：修复搜索结果链接失效、Windows 安装包内「跑代码」失效、PDF 上传静默失败三个严重问题；本地内置模型 / Ollama 免 Key 路径下 Agent 不再残废；数据落盘改原子写，新增 MIT 许可与自动化测试。",
+  "url": "https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore_Setup_1.0.1.exe"
 }

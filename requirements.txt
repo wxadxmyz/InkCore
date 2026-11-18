@@ -4,6 +4,7 @@ pywebview>=6.0
 requests>=2.28
 beautifulsoup4>=4.12        # 联网搜索（DuckDuckGo HTML 解析）
 reportlab>=4.0             # PDF 导出
+pypdf>=5.0                 # PDF 文本提取（纯 Python，Windows 打包版无需 poppler）
 pillow>=10.0               # 系统托盘图标
 pystray>=0.19              # 系统托盘菜单
 keyboard>=0.13             # 全局热键（Windows）

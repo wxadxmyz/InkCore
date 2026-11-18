@@ -6,7 +6,8 @@
 运行（开发）： python3 app.py            → http://127.0.0.1:7860
 打包桌面端：   python3 desktop_app.py    → 原生窗口（PyInstaller 打包为 exe，见 build.spec）
 """
-import os, re, json, random, uuid, subprocess, sys, io, base64, datetime, urllib.parse, zipfile, shutil
+import os, re, json, random, uuid, subprocess, sys, io, base64, datetime, urllib.parse, zipfile, shutil, threading
+from urllib.parse import parse_qs, urlparse
 from pathlib import Path
 import requests
 from flask import Flask, request, jsonify, send_from_directory, send_file, Response, stream_with_context
@@ -64,15 +65,21 @@ DEFAULT_CONFIG = {
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "1.0.0"   # 自动更新比对用
+APP_VERSION = "1.0.1"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
         if path.exists(): return json.loads(path.read_text(encoding="utf-8"))
     except Exception: pass
     return default
+_DATA_LOCK = threading.RLock()
 def _save(path, obj):
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    """原子写：先写同目录临时文件再 os.replace，避免多标签并发时读到半截 JSON。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with _DATA_LOCK:
+        tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
 
 config = _load(CONFIG_PATH, DEFAULT_CONFIG)
 def save_config(): _save(CONFIG_PATH, config)
@@ -518,10 +525,26 @@ def run_terminal(cmd):
         return out[:4000] or (f"[exit {r.returncode}]" if r.returncode else "[无输出]")
     except subprocess.TimeoutExpired: return "[超时] 命令执行超过 25 秒已被终止。"
     except Exception as e: return f"[错误] {e}"
+def _python_executable():
+    """返回可用于执行 Python 代码的解释器。
+    打包成 exe 后 PATH 里通常没有 python3，优先用当前解释器自身（sys.executable），
+    其次依次尝试 python3 / python，避免「跑代码」在发布版里失效。"""
+    candidates = [sys.executable, "python3", "python"]
+    seen = set()
+    for exe in candidates:
+        if not exe or exe in seen: continue
+        seen.add(exe)
+        try:
+            probe = subprocess.run([exe, "-c", "pass"], capture_output=True, timeout=5)
+            if probe.returncode == 0: return exe
+        except Exception:
+            continue
+    return sys.executable or "python3"
+
 def run_code(code):
     fn=profile_dir()/f"run_{uuid.uuid4().hex[:6]}.py"; fn.write_text(code, encoding="utf-8")
     try:
-        r=subprocess.run(["python3",str(fn)], capture_output=True, text=True, timeout=20)
+        r=subprocess.run([_python_executable(),str(fn)], capture_output=True, text=True, timeout=20)
         return ((r.stdout or "")+(r.stderr or ""))[:4000] or "[无输出]"
     except subprocess.TimeoutExpired: return "[超时] 代码运行超过 20 秒。"
     except Exception as e: return f"[错误] {e}"
@@ -565,7 +588,10 @@ def web_search(q, n=5):
                 href=a.get("href","")
                 real=href
                 if "uddg=" in href:
-                    try: real=parse_qs(urlparse(href).query).get("uddg",[href])[0]
+                    try:
+                        decoded=parse_qs(urlparse(href).query).get("uddg",[href])[0]
+                        # 只接受 http/https，避免把 javascript: 等危险 scheme 注入前端
+                        if urlparse(decoded).scheme in ("http","https"): real=decoded
                     except Exception: real=href
                 title=a.get_text(strip=True)
                 snippet=(sn.get_text(strip=True) if sn else "")
@@ -585,8 +611,26 @@ def save_docs(d):
 def extract_text(fn, suffix):
     try:
         if suffix==".pdf":
-            out=subprocess.run(["pdftotext",str(fn),"-"], capture_output=True, text=True, timeout=30)
-            return out.stdout
+            # 主路径：纯 Python 解析（pypdf / PyPDF2），无需 poppler 外部程序
+            text = None
+            try:
+                try:
+                    from pypdf import PdfReader
+                except ImportError:
+                    from PyPDF2 import PdfReader
+                reader = PdfReader(str(fn))
+                text = "\n".join((p.extract_text() or "") for p in reader.pages)
+            except Exception:
+                text = None
+            if text and text.strip():
+                return text
+            # 可选加速：本机装了 poppler 时作为兜底
+            try:
+                out=subprocess.run(["pdftotext",str(fn),"-"], capture_output=True, text=True, timeout=30)
+                if out.stdout and out.stdout.strip(): return out.stdout
+            except Exception:
+                pass
+            return None
         if suffix==".docx":
             from docx import Document as Docx
             return "\n".join(p.text for p in Docx(str(fn)).paragraphs)
@@ -667,8 +711,9 @@ def agent_step(step_text):
     if any(k in t for k in ["文档","资料","基于","总结这篇","读"]): return ("doc", AGENT_TOOLS["doc"]["run"](t))
     return ("write", AGENT_TOOLS["write"]["run"](t))  # 默认写作
 def llm_pick_tool(text):
-    """LLM 开启时，让模型为某一步骤挑最合适的工具（function-calling 思路的轻量实现）。"""
-    if not (config["llm"].get("enabled") and config["llm"].get("api_key")):
+    """LLM 可用时，让模型为某一步骤挑最合适的工具（function-calling 思路的轻量实现）。
+    判定统一走 _llm_usable()，本地内置模型 / Ollama 免 Key 路径同样生效。"""
+    if not _llm_usable(get_llm_cfg()):
         return None
     prompt = ('你是 Agent 工具选择器。仅回复一个 JSON：{"tool":"search|image|code|terminal|doc|write"}，'
               '根据用户步骤描述选择最合适的一个工具。不要输出其他内容。')
@@ -682,7 +727,7 @@ def llm_pick_tool(text):
     except Exception: pass
     return None
 def agent_run(goal, steps):
-    use_llm = config["llm"].get("enabled") and config["llm"].get("api_key")
+    use_llm = _llm_usable(get_llm_cfg())
     log=[f"[Agent] 目标：{goal}"]
     collected=[]
     for i,s in enumerate(steps):
