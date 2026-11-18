@@ -1,5 +1,26 @@
 # 更新日志
 
+## v1.4.0 — 安全版（2026-11-19）
+
+把"敢不敢开放给外人用"的底线补齐——M5 给工具调用装上白名单、审批与审计。
+
+### 命令安全（替换字符串黑名单）
+- 新增 `core/security/shell.py`：shlex 分词 + 只读命令白名单 + 危险参数/操作符拦截；执行改为 `shell=False` 按 token 运行，杜绝 shell 注入。
+- 8 类绕过全部被拦：`rm  -rf` 多空格、base64 解码执行、`cmd && rm`、`curl | sh`、路径穿越 `../`、命令替换 `$(...)`、超长命令、编码混淆。
+- 内置"清理电脑/连接 B 站"等玩法改走固定的 `run_terminal_raw`（仅硬编码安全命令，仍记审计），不被白名单误伤。
+
+### 审计日志（append-only）
+- 新增 `core/security/audit.py`：每次工具/命令调用记录 时间/风险等级/参数摘要/结果/是否拦截，单行 JSONL 只追加不改写。
+- 新增 `GET /api/audit?session=xxx`：按会话回放一次 Agent 运行的全部动作。
+
+### 分级与审批
+- 新增 `core/security/policy.py`：工具按 read/write/exec/network 分级，决策 allow/confirm/deny；策略全走 `config.security`，可临时降级（回滚到 v1.3.0 行为）。
+- 代码执行隔离到 `~/MoHeAI/_sandbox` 临时工作区 + 20s 超时；未开鉴权时禁止绑定非 127.0.0.1（`INKCORE_HOST` 可被 `auth.enabled` 把关）。
+
+### 验证
+- py_compile / ruff 全绿；pytest **113 条全过**（新增 M5 25 条）。
+- 8 条绕过样例逐条验证被拦；只读命令白名单验证不误伤。
+
 ## v1.3.0 — 上下文版（2026-11-19）
 
 解决"聊久了失忆、文档检索不准"——M2/M3 让模型会干活，M4 让它记得住、找得准。

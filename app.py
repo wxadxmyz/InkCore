@@ -18,6 +18,8 @@ from core.tools.registry import ToolSpec
 from core.tools.builtins import TOOL_DEFS, build_registry
 from core.tools.adapter import call_tools_llm, to_openai_tools
 from core.security.guard import safe_subpath
+# V2 安全内核（M5）：命令白名单 / 审批策略 / append-only 审计
+from core.security import analyze_command as _analyze_command, merge_policy as _merge_policy, decide as _sec_decide, AuditLog as _AuditLog
 from core.agent.tool_loop import run_agent
 from core.agent.react import ReActRunner, ReactConfig
 # V2 上下文内核（M4）：token 预算 / 结构化记忆 / 混合检索
@@ -40,6 +42,7 @@ OUT = DATA_HOME / "output"; OUT.mkdir(exist_ok=True)
 STATIC = APP_DIR / "static"
 
 CONFIG_PATH = DATA_HOME / "config.json"
+AUDIT_LOG = _AuditLog(DATA_HOME / "audit.jsonl")   # M5：append-only 安全审计日志
 # 内置供应商预设（一键切换，免填 base_url）
 PROVIDERS = {
     "openai":  {"label":"OpenAI","base_url":"https://api.openai.com/v1","model":"gpt-4o-mini",
@@ -76,13 +79,16 @@ DEFAULT_CONFIG = {
     "vision": {"enabled": False, "base_url": "https://api.openai.com/v1",
                "api_key": "", "model": "gpt-4o-mini"},
     "sandbox": {"readonly": False},
+    "security": {"mode": "balanced", "auto_approve": ["search", "doc", "read_file", "glob", "grep", "list_dir", "http_fetch", "image", "write"],
+                 "require_confirm": ["write", "exec", "network"], "deny": [],
+                 "allow_network": False, "allow_outside_roots": False, "bind_loopback_only": True},  # M5 安全门控（可临时降级）
     "context": {"engine": "budget", "summarize_older": True, "citation": True},  # M4 上下文工程开关
     "agent": {"use_tool_calls": True, "use_react": True, "max_steps": 12,
               "max_tool_calls": 24, "budget_chars": 60000, "tool_timeout_default": 20},  # M2 工具协议 + M3 ReAct 开关
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "1.3.0"   # 自动更新比对用
+APP_VERSION = "1.4.0"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
@@ -577,17 +583,36 @@ def _readonly_blocked(cmd):
 def run_terminal(cmd):
     cmd=cmd.strip()
     if not cmd: return "[空命令]"
+    sec = _merge_policy(config.get("security"))
+    # M5 主防线：shlex 分词 + 白名单 + 危险参数拦截（替换纯字符串黑名单）
+    verdict = _analyze_command(cmd, allow_network=bool(sec.get("allow_network")))
+    if not verdict.allowed:
+        AUDIT_LOG.record(tool="terminal", risk=verdict.risk, arguments={"command": cmd},
+                         ok=False, error=verdict.reason, blocked=True)
+        return f"[已拦截] {verdict.reason}。可改为只读命令如 ls / df -h / du -sh。"
+    # 旧黑名单保留为第二道防线（防御白名单命令参数里夹带的破坏性片段）
     danger=is_dangerous(cmd)
     if danger:
+        AUDIT_LOG.record(tool="terminal", risk="exec", arguments={"command": cmd},
+                         ok=False, error=danger, blocked=True)
         return f"[已拦截危险命令] 出于安全考虑，『{danger}』类操作被禁用。可改为只读命令如 ls / df -h / du -sh。"
     if config.get("sandbox",{}).get("readonly", False) and _readonly_blocked(cmd):
+        AUDIT_LOG.record(tool="terminal", risk="exec", arguments={"command": cmd},
+                         ok=False, error="readonly sandbox", blocked=True)
         return "[只读模式] 当前开启只读沙箱，写操作（rm/cp/mv/dd 等）已禁用。可在设置里关闭只读模式。"
     try:
-        r=subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=25, cwd=str(APP_DIR))
+        # 不再用 shell=True：白名单只读命令直接按 token 列表执行，杜绝 shell 注入
+        r=subprocess.run(verdict.tokens, shell=False, capture_output=True, text=True, timeout=25, cwd=str(APP_DIR))
         out=(r.stdout or "")+(r.stderr or "")
+        AUDIT_LOG.record(tool="terminal", risk=verdict.risk, arguments={"command": cmd},
+                         ok=(r.returncode == 0), error=out[:200] if r.returncode else "")
         return out[:4000] or (f"[exit {r.returncode}]" if r.returncode else "[无输出]")
-    except subprocess.TimeoutExpired: return "[超时] 命令执行超过 25 秒已被终止。"
-    except Exception as e: return f"[错误] {e}"
+    except subprocess.TimeoutExpired:
+        AUDIT_LOG.record(tool="terminal", risk="exec", arguments={"command": cmd}, ok=False, error="timeout")
+        return "[超时] 命令执行超过 25 秒已被终止。"
+    except Exception as e:
+        AUDIT_LOG.record(tool="terminal", risk="exec", arguments={"command": cmd}, ok=False, error=str(e))
+        return f"[错误] {e}"
 def _python_executable():
     """返回可用于执行 Python 代码的解释器。
     打包成 exe 后 PATH 里通常没有 python3，优先用当前解释器自身（sys.executable），
@@ -605,22 +630,53 @@ def _python_executable():
     return sys.executable or "python3"
 
 def run_code(code):
-    fn=profile_dir()/f"run_{uuid.uuid4().hex[:6]}.py"; fn.write_text(code, encoding="utf-8")
+    # M5：执行隔离到专用临时工作区（代码里的相对读写都被限定在此目录），用完即删
+    workdir = DATA_HOME / "_sandbox"
+    workdir.mkdir(exist_ok=True)
+    fn = workdir / f"run_{uuid.uuid4().hex[:8]}.py"
+    fn.write_text(code, encoding="utf-8")
     try:
-        r=subprocess.run([_python_executable(),str(fn)], capture_output=True, text=True, timeout=20)
-        return ((r.stdout or "")+(r.stderr or ""))[:4000] or "[无输出]"
-    except subprocess.TimeoutExpired: return "[超时] 代码运行超过 20 秒。"
-    except Exception as e: return f"[错误] {e}"
+        r=subprocess.run([_python_executable(),str(fn)], capture_output=True, text=True,
+                         timeout=20, cwd=str(workdir))
+        out = ((r.stdout or "")+(r.stderr or ""))[:4000] or "[无输出]"
+        AUDIT_LOG.record(tool="code", risk="exec", arguments={"code": code}, ok=(r.returncode == 0),
+                         error="" if r.returncode == 0 else out[:200])
+        return out
+    except subprocess.TimeoutExpired:
+        AUDIT_LOG.record(tool="code", risk="exec", arguments={"code": code}, ok=False, error="timeout")
+        return "[超时] 代码运行超过 20 秒。"
+    except Exception as e:
+        AUDIT_LOG.record(tool="code", risk="exec", arguments={"code": code}, ok=False, error=str(e))
+        return f"[错误] {e}"
     finally:
         try: fn.unlink()
         except Exception: pass
+
+def run_terminal_raw(fixed_cmd, *, risk="read"):
+    """执行应用内置的固定命令（非用户输入拼接），仍记审计并带超时。
+
+    仅用于 handle_fun 等内部玩法：命令是硬编码的安全只读串，不经过用户可控的白名单判定。
+    绝不接受外部/模型传入的内容，避免成为绕过 M5 门控的后门。
+    """
+    try:
+        r=subprocess.run(fixed_cmd, shell=True, capture_output=True, text=True, timeout=25, cwd=str(APP_DIR))
+        out=(r.stdout or "")+(r.stderr or "")
+        AUDIT_LOG.record(tool="terminal_internal", risk=risk, arguments={"command": fixed_cmd[:200]},
+                         ok=(r.returncode == 0))
+        return out[:4000] or (f"[exit {r.returncode}]" if r.returncode else "[无输出]")
+    except subprocess.TimeoutExpired:
+        AUDIT_LOG.record(tool="terminal_internal", risk=risk, arguments={"command": fixed_cmd[:200]},
+                         ok=False, error="timeout")
+        return "[超时] 命令执行超过 25 秒已被终止。"
+    except Exception as e:
+        return f"[错误] {e}"
 
 # ---------- 离谱玩法 ----------
 def handle_fun(text, session_id):
     if "下载" in text or "steam" in text.lower():
         return ("🎮 **下载玩法（终端联动）**\n我来调用终端帮你拉取资源。请在对话里给出下载链接，例如：\n> 下载 https://example.com/game.zip\n\n或直接说「清理电脑」「连 b站」试试别的离谱玩法。")
     if "清理" in text or "垃圾" in text:
-        out=run_terminal("echo '🧹 安全清理预览（仅统计，不删除）' && du -sh ~ 2>/dev/null; df -h / | tail -1")
+        out=run_terminal_raw("echo '🧹 安全清理预览（仅统计，不删除）' && du -sh ~ 2>/dev/null; df -h / | tail -1")
         return f"🧹 **清理电脑（只读扫描）**\n```\n{out}\n```\n_默认只做统计，保护你的数据；真要删临时文件可指定路径。_"
     if "游戏" in text or "植物大战僵尸" in text or "pvz" in text.lower() or "贪吃蛇" in text or "搓" in text:
         html=gen_game("贪吃蛇"); fn=OUT/f"game_{uuid.uuid4().hex[:8]}.html"; fn.write_text(html, encoding="utf-8")
@@ -631,7 +687,7 @@ def handle_fun(text, session_id):
         return {"reply":"🕹️ **搓游戏玩法**\n已为你现场生成《贪吃蛇》可玩 HTML！点下面按钮在浏览器打开即玩：",
                 "mode":"game","game_path":f"/output/{fn.name}"}
     if "b站" in text or "bilibili" in text.lower() or "连接" in text:
-        out=run_terminal("curl -sI --max-time 10 https://www.bilibili.com | head -5")
+        out=run_terminal_raw("curl -sI --max-time 10 https://www.bilibili.com | head -5", risk="network")
         return f"🌐 **连接外部网站（终端 curl）**\n```\n{out}\n```"
     return None
 
@@ -1974,6 +2030,14 @@ def api_embedded_download():
         return jsonify({"error": "已在下载中"}), 409
     return jsonify({"started": True, "model": local_llm._default_model_key(key)})
 
+# ---------- 安全审计（M5） ----------
+@app.route("/api/audit")
+def api_audit():
+    """回放审计日志（append-only）。支持 ?session=xxx 过滤；默认返回最近 500 条。"""
+    session = request.args.get("session", "")
+    rows = AUDIT_LOG.replay(session)
+    return jsonify({"ok": True, "count": len(rows), "events": rows[-500:]})
+
 # ---------- 数据备份 / 恢复 ----------
 @app.route("/api/backup")
 def api_backup():
@@ -2008,11 +2072,19 @@ def api_restore():
         except Exception: pass
 
 if __name__ == "__main__":
-    print("墨核 AI Studio (InkCore) 已启动 → http://127.0.0.1:7860")
+    # M5：远程访问前置——未显式开启鉴权时，禁止绑定非回环地址，避免裸奔暴露到局域网/公网
+    sec = _merge_policy(config.get("security"))
+    bind_host = os.environ.get("INKCORE_HOST", "127.0.0.1")
+    if bind_host not in ("127.0.0.1", "localhost", "::1"):
+        auth_on = bool(config.get("auth", {}).get("enabled"))
+        if not auth_on:
+            print(f"[安全] 拒绝绑定 {bind_host}：远程访问需先在设置里开启鉴权（auth.enabled）。已回退到 127.0.0.1。")
+            bind_host = "127.0.0.1"
+    print(f"墨核 AI Studio (InkCore) 已启动 → http://{bind_host}:7860")
     try:
         # 生产级 WSGI 服务器：支持并发 SSE 流式 + 普通请求（dev server 会在并发流时卡住）
         from waitress import serve
-        serve(app, host="127.0.0.1", port=7860, threads=12, channel_timeout=120)
+        serve(app, host=bind_host, port=7860, threads=12, channel_timeout=120)
     except Exception as e:
         print("waitress 不可用，回退到 Flask dev server：", e)
-        app.run(host="127.0.0.1", port=7860, debug=False, threaded=True)
+        app.run(host=bind_host, port=7860, debug=False, threaded=True)
