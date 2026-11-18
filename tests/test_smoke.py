@@ -28,8 +28,12 @@ def test_module_imports(appmod):
     assert hasattr(appmod, "route")
 
 
-def test_version_is_1_1_0(appmod):
-    assert appmod.APP_VERSION == "1.3.0"
+def test_version_matches_manifest(appmod):
+    """版本号应与 version.json 清单一致（避免每次升版都改测试）。"""
+    import json as _json
+    from pathlib import Path as _Path
+    manifest = _Path(__file__).resolve().parent.parent / "version.json"
+    assert appmod.APP_VERSION == _json.loads(manifest.read_text(encoding="utf-8"))["version"]
 
 
 # ---------- D1：parse_qs / urlparse ----------
