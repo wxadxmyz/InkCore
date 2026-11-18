@@ -661,7 +661,14 @@ const PANELS = {
       <div id="agentSteps"></div>
       <button class="btn sec" onclick="addStep()" style="margin-top:8px;display:inline-flex;align-items:center;justify-content:center;gap:6px">${ic('plus')}添加步骤</button>
     </div>
-    <button class="btn" style="display:inline-flex;align-items:center;justify-content:center;gap:6px" onclick="runAgent()">${ic('agent')}运行 Agent</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn" id="agentRunBtn" style="display:inline-flex;align-items:center;justify-content:center;gap:6px" onclick="runAgent()">${ic('agent')}运行 Agent</button>
+      <button class="btn sec" id="agentStopBtn" style="display:none" onclick="stopAgent()">⏹ 停止</button>
+    </div>
+    <div class="pcard" id="agentTimelineCard" style="display:none">
+      <div class="psec-title">任务进度 <span id="agentStepBadge" style="opacity:.6;font-size:12px"></span></div>
+      <div id="agentTimeline"></div>
+    </div>
     <div class="pcard">
       <div class="psec-title">结果</div>
       <div class="term-out" id="agentOut"></div>
@@ -1338,18 +1345,75 @@ function addStep(){ stepN++;
   d.innerHTML=`<input class="field" placeholder="步骤${stepN}：如 搜索今日热榜">`;
   box.appendChild(d);
 }
+let _agentRunId=null, _agentAbort=null;
+function stopAgent(){
+  if(!_agentRunId) return;
+  fetch("/api/agent/stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({run_id:_agentRunId})})
+    .then(()=>{ toast("已请求停止 Agent"); })
+    .catch(()=>{});
+}
+function _agentTimelineAdd(icon,text,status){
+  const card=$("#agentTimelineCard"); if(card) card.style.display="";
+  const box=$("#agentTimeline"); if(!box) return;
+  const row=document.createElement("div");
+  row.style.cssText="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.12);font-size:13px";
+  const mark=status==="ok"?"✅":status==="error"?"❌":status==="run"?"⏳":"•";
+  row.innerHTML=`<span style="flex:0 0 auto">${mark}</span><span style="flex:1"><b>${icon}</b> ${text}</span>`;
+  box.appendChild(row);
+  box.scrollTop=box.scrollHeight;
+}
 async function runAgent(){
-  const goal=$("#agentGoal").value;
-  const steps=[...$$("#agentSteps input")].map(i=>i.value).filter(Boolean);
-  if(!steps.length){ alert("请至少添加一个步骤。"); return; }
-  $("#agentOut").textContent="[Agent] 提交服务端编排…\n";
+  const goal=$("#agentGoal").value.trim();
+  const steps=[...$$("#agentSteps input")].map(i=>i.value.trim()).filter(Boolean);
+  if(!goal && !steps.length){ alert("请填写目标或至少一个步骤。"); return; }
+  const out=$("#agentOut"); if(out) out.textContent="";
+  const tl=$("#agentTimeline"); if(tl) tl.innerHTML="";
+  const badge=$("#agentStepBadge"); if(badge) badge.textContent="";
+  const runBtn=$("#agentRunBtn"), stopBtn=$("#agentStopBtn");
+  if(runBtn) runBtn.style.display="none";
+  if(stopBtn) stopBtn.style.display="inline-flex";
+  _agentAbort=new AbortController();
+  let fullText="";
   try{
-    const r = await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,steps})});
-    const d = await r.json();
-    $("#agentOut").textContent = d.reply;
-    // 同步把结果塞进对话，便于导出
-    addMsg("assistant", md(d.reply.split("[Agent] 完成")[0]||d.reply));
-  }catch(e){ $("#agentOut").textContent="[Agent] 调用失败："+e.message; }
+    const r=await fetch("/api/agent_stream",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({goal:goal||steps[0],steps}),signal:_agentAbort.signal});
+    const reader=r.body.getReader(), dec=new TextDecoder();
+    let buf="";
+    while(true){
+      const {done,value}=await reader.read();
+      if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let idx;
+      while((idx=buf.indexOf("\n\n"))>=0){
+        const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
+        const line=chunk.split("\n").find(l=>l.startsWith("data:"));
+        if(!line) continue;
+        let e; try{ e=JSON.parse(line.slice(5).trim()); }catch(_){ continue; }
+        if(e.type==="meta"){
+          _agentRunId=e.run_id;
+        }else if(e.type==="plan_update"){
+          if(badge) badge.textContent=`第 ${e.step}/${e.max_steps} 步`;
+        }else if(e.type==="tool_call"){
+          _agentTimelineAdd(e.name,JSON.stringify(e.arguments||{}),"run");
+        }else if(e.type==="tool_result"){
+          _agentTimelineAdd(e.name,e.ok?"成功":(e.error||"失败"),e.ok?"ok":"error");
+        }else if(e.type==="error"){
+          if(out) out.textContent+="\n[错误] "+e.message;
+        }else if(e.type==="done"){
+          if(badge) badge.textContent=`完成（${e.tool_calls} 次工具调用）`;
+          fullText=e.reply||"";  // 最终结果随 done 事件返回，避免重复执行一次 Agent
+        }
+      }
+    }
+    if(fullText && out) out.textContent=fullText;
+    if(fullText) addMsg("assistant", md(fullText.split("[Agent] 完成")[0]||fullText));
+  }catch(e){
+    if(e.name!=="AbortError" && out) out.textContent="[Agent] 调用失败："+e.message;
+  }finally{
+    _agentRunId=null; _agentAbort=null;
+    if(runBtn) runBtn.style.display="inline-flex";
+    if(stopBtn) stopBtn.style.display="none";
+  }
 }
 // ---------- 改动3：聊天说一句 → 自动打开并铺满对应工作面板，内容已填好 ----------
 function _enterFullscreen(){

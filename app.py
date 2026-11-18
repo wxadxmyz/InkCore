@@ -19,6 +19,7 @@ from core.tools.builtins import TOOL_DEFS, build_registry
 from core.tools.adapter import call_tools_llm, to_openai_tools
 from core.security.guard import safe_subpath
 from core.agent.tool_loop import run_agent
+from core.agent.react import ReActRunner, ReactConfig
 
 # ---------- 路径（兼容打包后的 exe） ----------
 FROZEN = getattr(sys, "frozen", False)
@@ -68,11 +69,12 @@ DEFAULT_CONFIG = {
     "vision": {"enabled": False, "base_url": "https://api.openai.com/v1",
                "api_key": "", "model": "gpt-4o-mini"},
     "sandbox": {"readonly": False},
-    "agent": {"use_tool_calls": True, "max_tool_rounds": 1, "tool_timeout_default": 20},  # M2 工具协议开关
+    "agent": {"use_tool_calls": True, "use_react": True, "max_steps": 12,
+              "max_tool_calls": 24, "budget_chars": 60000, "tool_timeout_default": 20},  # M2 工具协议 + M3 ReAct 开关
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "1.1.0"   # 自动更新比对用
+APP_VERSION = "1.2.0"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
@@ -907,13 +909,59 @@ def _agent_fallback(step_text):
     except Exception as e:
         return None, f"[兜底失败] {e}"
 
-def agent_run_v2(goal, steps):
-    """M2 入口：走 tool_calls 循环；USE_TOOL_CALLS=False 时退回旧 agent_run。"""
+def _react_config():
+    a = config.get("agent", {})
+    return ReactConfig(max_steps=int(a.get("max_steps", 12)),
+                       max_tool_calls=int(a.get("max_tool_calls", 24)),
+                       budget_chars=int(a.get("budget_chars", 60000)))
+
+
+def agent_run_v2(goal, steps, *, on_event=None, stop_event=None, checkpoint=None, session_id=None):
+    """M3 入口：默认走 ReAct 多轮循环；关 use_tool_calls 时退回 M1 旧路由。
+
+    M2 的同步调用（只传 goal, steps）行为仍兼容——ReActRunner 会自行跑完并返回同结构。
+    """
     if not config.get("agent", {}).get("use_tool_calls", True):
-        return {"reply": agent_run(goal, steps), "mode": "agent", "tool_trace": [], "used_llm": False}
-    cfg = get_llm_cfg()
+        return {"reply": agent_run(goal, steps), "mode": "agent", "tool_trace": [],
+                "used_llm": False, "reason": "legacy"}
+    cfg = get_llm_cfg(session_id)
+    # M3：若启用 react（默认开），用 ReAct 循环；否则用 M2 单轮
+    use_react = config.get("agent", {}).get("use_react", True)
+    if use_react:
+        runner = ReActRunner(goal, TOOL_REGISTRY, cfg,
+                             fallback_fn=_agent_fallback,
+                             react_cfg=_react_config(),
+                             on_event=on_event, stop_event=stop_event,
+                             checkpoint=checkpoint)
+        r = runner.run()
+        return {"reply": r.reply, "mode": "agent", "tool_trace": r.traces,
+                "tool_calls_count": len(r.traces), "used_llm": r.used_llm,
+                "reason": r.reason, "steps": r.steps,
+                "checkpoint": runner.snapshot()}
     return run_agent(goal, steps, registry=TOOL_REGISTRY, cfg=cfg,
                      fallback_fn=_agent_fallback)
+
+
+# ---------- Agent 运行管理（停止 / checkpoint，M3）----------
+_AGENT_RUNS = {}   # run_id -> {"stop": Event, "done": bool}
+_AGENT_LOCK = threading.RLock()
+
+def checkpoint_path(session_id):
+    return profile_dir() / f"agent_ckpt_{session_id}.json"
+
+def load_checkpoint(session_id):
+    try:
+        p = checkpoint_path(session_id)
+        if p.exists(): return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return None
+
+def save_checkpoint(session_id, ckpt):
+    try:
+        _save(checkpoint_path(session_id), ckpt)
+    except Exception:
+        pass
 
 # ---------- 意图路由 ----------
 WELCOME = ("我是**墨核 AI** 🐱，你的桌面智能助手：\n"
@@ -1801,9 +1849,64 @@ def api_check_update():
 @app.route("/api/agent", methods=["POST"])
 def api_agent():
     d=request.json or {}; goal=d.get("goal",""); steps=d.get("steps",[])
-    if not steps: return jsonify({"error":"empty steps"}),400
-    res = agent_run_v2(goal, steps)
+    if not steps and not goal: return jsonify({"error":"empty steps"}),400
+    sid = d.get("session_id")
+    ckpt = load_checkpoint(sid) if (sid and d.get("resume")) else None
+    res = agent_run_v2(goal, steps or [goal], checkpoint=ckpt, session_id=sid)
+    if sid and res.get("checkpoint"): save_checkpoint(sid, res["checkpoint"])
     return jsonify(res)
+
+@app.route("/api/agent_stream", methods=["POST"])
+def api_agent_stream():
+    """M3 SSE：实时推送 plan_update / tool_call / tool_result / error / done。"""
+    d=request.json or {}; goal=d.get("goal",""); steps=d.get("steps",[])
+    if not goal and not steps: return jsonify({"error":"empty"}),400
+    run_id = uuid.uuid4().hex
+    stop = threading.Event()
+    sid = d.get("session_id")
+    ckpt = load_checkpoint(sid) if (sid and d.get("resume")) else None
+    with _AGENT_LOCK:
+        _AGENT_RUNS[run_id] = {"stop": stop, "done": False}
+    import queue
+    q = queue.Queue()
+    def ev(obj): return "data: "+json.dumps(obj, ensure_ascii=False)+"\n\n"
+    def worker():
+        """在后台线程同步跑 agent；on_event 把所有事件推进队列。"""
+        try:
+            q.put(("line", ev({"type":"meta","run_id":run_id,"goal":goal})))
+            res = agent_run_v2(goal, steps or [goal],
+                               on_event=lambda e: q.put(("line", ev(e))),
+                               stop_event=stop, checkpoint=ckpt, session_id=sid)
+            if sid and res.get("checkpoint"): save_checkpoint(sid, res["checkpoint"])
+        except Exception as e:
+            q.put(("line", ev({"type":"error","message":str(e)})))
+        finally:
+            with _AGENT_LOCK:
+                r = _AGENT_RUNS.get(run_id)
+                if r: r["done"] = True
+                _AGENT_RUNS.pop(run_id, None)
+            q.put(("end", None))
+    def gen_events():
+        threading.Thread(target=worker, daemon=True).start()
+        while True:
+            kind, val = q.get()
+            if kind == "line":
+                yield val
+            else:
+                break
+    return Response(stream_with_context(gen_events()), mimetype="text/event-stream",
+                    headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
+
+@app.route("/api/agent/stop", methods=["POST"])
+def api_agent_stop():
+    """停止指定 run（1 秒内生效）。"""
+    run_id = (request.json or {}).get("run_id")
+    with _AGENT_LOCK:
+        run = _AGENT_RUNS.get(run_id)
+        if run:
+            run["stop"].set()
+            return jsonify({"stopped": True})
+    return jsonify({"stopped": False, "reason": "not found"})
 
 # ---------- 本地内置模型（离线推理，免 Ollama） ----------
 @app.route("/api/embedded/status")
