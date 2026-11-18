@@ -53,7 +53,7 @@ jobs:
       - name: Build single-file exe (PyInstaller)
         run: pyinstaller build.spec
 
-      - name: Build installer (Inno Setup, 固定版本)
+      - name: Build installer (Inno Setup, 版本号取自 version.json)
         id: inno
         shell: pwsh
         run: |
@@ -73,6 +73,12 @@ jobs:
           $iscc = $cands | ForEach-Object { Get-ChildItem $_ -Recurse -Filter ISCC.exe -ErrorAction SilentlyContinue } | Select-Object -First 1
           if (-not $iscc) { Write-Host "::error::未找到 ISCC.exe，安装包构建失败"; exit 1 }
           Write-Host ("使用 ISCC: " + $iscc.FullName)
+          # 用 version.json 的版本号覆盖 installer.iss 里写死的默认值，避免安装包名停留在 1.0.0
+          $ver = "${{ steps.ver.outputs.version }}"
+          $iss = Get-Content installer.iss -Raw -Encoding UTF8
+          $iss = $iss -replace '(#define MyAppVersion\s+")[0-9.]+(")', ('${1}' + $ver + '${2}')
+          Set-Content installer.iss -Value $iss -Encoding UTF8 -NoNewline
+          Write-Host ("安装包版本已设为: " + $ver)
           & $iscc.FullName installer.iss
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::ISCC 编译 installer.iss 失败"; exit 1 }
           $out = Get-ChildItem installer/InkCore_Setup_*.exe | Select-Object -First 1

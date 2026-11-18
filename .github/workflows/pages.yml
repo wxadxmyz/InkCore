@@ -4,7 +4,8 @@
 #    1) 确保仓库 Settings → Pages → Source 选择 "GitHub Actions"
 #    2) 把代码推到 main 分支
 #    3) 本工作流自动把 docs/ 目录部署到 https://wxadxmyz.github.io/InkCore/
-#  说明：docs/ 目录由 tools/build_gallery.py 生成，不要手动修改。
+#  说明：部署前会先跑 tools/build_gallery.py 从 version.json 重新生成画廊，
+#        版本号永远与发布版本同步，无需手动生成或手改 docs/。
 # ============================================================
 name: Deploy Gallery to Pages
 
@@ -35,6 +36,14 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate gallery from version.json
+        run: python tools/build_gallery.py
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

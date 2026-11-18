@@ -3,11 +3,11 @@
 ;  用法：
 ;   1) 先用 build_windows.bat 生成 dist\InkCore.exe
 ;   2) 用 Inno Setup Compiler 打开本文件并编译
-;   3) 产物： installer\InkCore_Setup_1.0.0.exe
+;   3) 产物： installer\InkCore_Setup_<version>.exe（版本号由 build.yml 从 version.json 注入）
 ;  说明：安装包不带签名，分发前建议用代码签名证书签名（见 README）。
 ; ============================================================
 #define MyAppName "墨核 AI Studio (InkCore)"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.0"   ; CI 构建时会被替换为 version.json 中的版本
 #define MyAppPublisher "InkCore"
 #define MyAppURL "https://github.com/wxadxmyz/InkCore"
 #define MyAppExeName "InkCore.exe"
