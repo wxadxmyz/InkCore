@@ -29,7 +29,7 @@ def test_module_imports(appmod):
 
 
 def test_version_is_1_1_0(appmod):
-    assert appmod.APP_VERSION == "1.2.0"
+    assert appmod.APP_VERSION == "1.3.0"
 
 
 # ---------- D1：parse_qs / urlparse ----------

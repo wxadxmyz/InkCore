@@ -20,6 +20,12 @@ from core.tools.adapter import call_tools_llm, to_openai_tools
 from core.security.guard import safe_subpath
 from core.agent.tool_loop import run_agent
 from core.agent.react import ReActRunner, ReactConfig
+# V2 上下文内核（M4）：token 预算 / 结构化记忆 / 混合检索
+from core.context import (
+    assemble_context as _assemble_context, ContextBudget,
+    migrate_v1 as _mem_migrate_v1, facts_to_prompt as _facts_to_prompt,
+    hybrid_search as _hybrid_search, format_citations as _format_citations,
+)
 
 # ---------- 路径（兼容打包后的 exe） ----------
 FROZEN = getattr(sys, "frozen", False)
@@ -63,18 +69,20 @@ DEFAULT_CONFIG = {
     "active_profile": "default",
     "provider": "custom",
     "llm": {"enabled": False, "base_url": "https://api.openai.com/v1",
-            "api_key": "", "model": "gpt-4o-mini", "temperature": 0.9},
+            "api_key": "", "model": "gpt-4o-mini", "temperature": 0.9,
+            "context_window": 8192},  # M4：上下文预算（token），长对话自动摘要
     "image": {"enabled": False, "base_url": "https://api.openai.com/v1",
               "api_key": "", "model": "gpt-image-1"},
     "vision": {"enabled": False, "base_url": "https://api.openai.com/v1",
                "api_key": "", "model": "gpt-4o-mini"},
     "sandbox": {"readonly": False},
+    "context": {"engine": "budget", "summarize_older": True, "citation": True},  # M4 上下文工程开关
     "agent": {"use_tool_calls": True, "use_react": True, "max_steps": 12,
               "max_tool_calls": 24, "budget_chars": 60000, "tool_timeout_default": 20},  # M2 工具协议 + M3 ReAct 开关
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "1.2.0"   # 自动更新比对用
+APP_VERSION = "1.3.0"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
@@ -177,14 +185,49 @@ def update_memory(session_id, text):
     if sm:
         st = sm.group(1).lstrip("是").strip()
         if st: m["style"] = st
+    # M4：同步写入 v2 结构化事实（v1 字段保留，前端 /api/memory 不受影响）
+    try:
+        from core.context.memory_v2 import Fact
+        v2 = _mem_v2(session_id)
+        for name in m["characters"]:
+            v2.add(Fact(type="character", entity=str(name), source="inferred"))
+        for kw in ["仙侠","都市","悬疑","科幻","言情","玄幻","历史","末日","西幻","无限流"]:
+            if kw in text:
+                v2.add(Fact(type="genre", entity=kw, source="inferred"))
+        if m.get("style"):
+            v2.add(Fact(type="style", entity=str(m["style"]), source="inferred"))
+        _mem_v2_persist(session_id, v2)
+    except Exception:
+        pass  # v2 同步失败不影响 v1 主路径
     _save(profile_dir()/"memory.json", memory)
+def _mem_v2(session_id):
+    """读取会话的 v2 结构化记忆；无则从未 v1 现场迁移（不落盘，只读兼容）。"""
+    raw = memory.get(session_id, {})
+    v2 = raw.get("__v2")
+    if v2:
+        return _mem_v2_cache.get(session_id) or _load_mem_v2(v2, session_id)
+    return _mem_migrate_v1(get_mem(session_id))
+
+def _load_mem_v2(v2dict, session_id):
+    m = _mem_v2_import(v2dict)
+    _mem_v2_cache[session_id] = m
+    return m
+
+def _mem_v2_import(v2dict):
+    from core.context.memory_v2 import MemoryV2
+    return MemoryV2.from_dict(v2dict)
+
+_mem_v2_cache = {}
+
+def _mem_v2_persist(session_id, m):
+    raw = memory.setdefault(session_id, {})
+    raw["__v2"] = m.to_dict()
+    _mem_v2_cache[session_id] = m
+    _save(profile_dir()/"memory.json", memory)
+
 def memory_context(session_id):
-    m = get_mem(session_id); bits=[]
-    if m["characters"]: bits.append("人物："+"、".join(m["characters"]))
-    if m["style"]: bits.append("风格："+m["style"])
-    if m["facts"]: bits.append("设定："+"。".join(m["facts"]))
-    if m["world"]: bits.append("世界观："+"、".join(m["world"]))
-    return ("（已知创作设定："+"。".join(bits)+"）\n") if bits else ""
+    """M4：优先用 v2 结构化事实渲染（按类型分组），v1 字段作兜底。"""
+    return _facts_to_prompt(_mem_v2(session_id))
 
 # ---------- 真实大模型 ----------
 SYSTEM_BASE = "你是「墨核 AI」桌面智能助手，能自由聊天、回答各类问题、联网搜资料、写作（小说/文章/文案）、生成提示词、写代码、给建议。风格自然、准确、有帮助、信息密度高。"
@@ -291,15 +334,26 @@ def call_api(section, system, history, user, image_b64=None, cfg=None, stream=Fa
     return _llm_complete(msgs, c)
 
 
-def call_llm(system, history, user, cfg=None, stream=False):
+def call_llm(system, history, user, cfg=None, stream=False, memory_text="", knowledge_text=""):
     c = cfg or config["llm"]
     if not c.get("enabled") or (not c.get("api_key") and _auth_required(c)):
         return None
     url = c["base_url"].rstrip("/") + "/chat/completions"
-    msgs = [{"role":"system","content":system}]
-    for h in (history or [])[-12:]:
-        msgs.append({"role": h.get("role"), "content": h.get("content","")})
-    msgs.append({"role":"user","content":user})
+    # M4：按 token 预算组装上下文，替代粗暴的 history[-12:] 硬截。
+    # 摘要用抽取式兜底（不递归调用 LLM，避免额外开销）；超预算旧轮压缩保留要点。
+    if config.get("context", {}).get("engine", "budget") == "legacy":
+        msgs = [{"role":"system","content":system}]
+        for h in (history or [])[-12:]:
+            msgs.append({"role": h.get("role"), "content": h.get("content","")})
+        msgs.append({"role":"user","content":user})
+    else:
+        window = int(c.get("context_window", 8192) or 8192)
+        budget = ContextBudget(total=max(1024, window))
+        assembled = _assemble_context(
+            system, history or [], user,
+            memory_text=memory_text, knowledge_text=knowledge_text, budget=budget,
+        )
+        msgs = assembled.messages
     if stream:
         return _llm_stream(msgs, c)
     return _llm_complete(msgs, c)
@@ -655,19 +709,15 @@ def add_doc(name, text):
     rec={"id":uuid.uuid4().hex[:8],"name":name,"text":text[:80000],"chunks":chunks[:600]}
     d.append(rec); save_docs(d); return rec
 def retrieve_doc(q, k=3):
-    d=load_docs()
-    if not d: return ""
-    # 中文字符级重叠打分（中文无空格，不能用分词）
-    qchars=[c for c in q if c.strip()]
-    if not qchars: return ""
-    scored=[]
-    for doc in d:
-        for ch in doc["chunks"]:
-            sc=sum(1 for c in qchars if c in ch)
-            if sc>0: scored.append((sc, doc["name"], ch))
-    scored.sort(reverse=True)
-    if not scored: return ""
-    return "（参考文档片段）\n"+"\n".join(f"[{name}] {ch[:280]}" for _,name,ch in scored[:k])
+    """M4：混合检索（字符 bigram + BM25），返回带出处标注的片段。
+
+    替代旧的「数查询字符是否出现」——那个算法长文档几乎全命中，等于随机。
+    """
+    d = load_docs()
+    if not d or not (q or "").strip():
+        return ""
+    results = _hybrid_search(q, d, k=k)
+    return _format_citations(results)
 
 def rag_ctx(text):
     """把知识库检索结果注入上下文：用户上传过文档且命中相关片段时返回片段文本，否则返回空串。

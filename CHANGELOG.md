@@ -1,5 +1,27 @@
 # 更新日志
 
+## v1.3.0 — 上下文版（2026-11-19）
+
+解决"聊久了失忆、文档检索不准"——M2/M3 让模型会干活，M4 让它记得住、找得准。
+
+### Token 预算与滚动摘要
+- 新增 `core/context/budget.py`：按「系统+记忆 15% / 知识 30% / 近期对话 40% / 摘要 15%」分配预算，替代粗暴的 `history[-12:]` 硬截。
+- 超预算的旧对话轮次压缩成摘要（抽取式兜底，不额外调 LLM），原文不丢、关键信息保留。
+- 窗口大小读 `llm.context_window`（默认 8192）；`context.engine=legacy` 可一键退回旧行为。
+
+### 结构化记忆 v2
+- 新增 `core/context/memory_v2.py`：事实带 type/entity/value/confidence/source/ts，同类去重、可按类型/实体检索。
+- `memory.json` 里 `__v2` 与 v1 字段共存，旧版读 v1 照常工作——非破坏性迁移。
+- 新增 `tools/migrate_memory.py`：`--dry-run` 预览 / `--reverse` 反向导出。
+
+### 混合检索与引用
+- 新增 `core/context/retrieval.py`：字符 bigram + BM25 融合，替代"数查询字符是否出现"的伪检索（长文档几乎全命中）。
+- 结果带 `[文档名#片段N]` 出处标注；预留 embedding 接口（注入 `embed_score_fn` 即三路融合）。
+
+### 验证
+- py_compile / ruff 全绿；pytest **88 条全过**（M1 21 + M2 29 + M3 15 + M4 23）。
+- 端到端：3 文档中只问 1 份 → 命中正确并带出处；记忆跨 20 轮保留；上下文不超窗口。
+
 ## v1.2.0 — ReAct 版（2026-11-19）
 
 M2 让模型会调工具，M3 让模型会**自己决定调几次、失败怎么办**——从这里开始才真正像个 Agent。
