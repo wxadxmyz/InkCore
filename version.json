@@ -1,5 +1,5 @@
 {
-  "version": "1.0.1",
-  "notes": "墨核 AI Studio v1.0.1 止血版：修复搜索结果链接失效、Windows 安装包内「跑代码」失效、PDF 上传静默失败三个严重问题；本地内置模型 / Ollama 免 Key 路径下 Agent 不再残废；数据落盘改原子写，新增 MIT 许可与自动化测试。",
-  "url": "https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore_Setup_1.0.1.exe"
+  "version": "1.1.0",
+  "notes": "墨核 AI Studio v1.1.0 工具协议版：新增 core 工具内核，注册 13 个工具（含 read_file/grep/glob 等 7 个工程工具），接入 OpenAI 兼容 tool_calls 协议；模型可按 JSON Schema 自主发起带参数调用并据结果作答，失败自动回填让 Agent 换办法；不支持 tool_calls 的本地模型与关 LLM 时自动退回关键词路由，前端零改动。",
+  "url": "https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore_Setup_1.1.0.exe"
 }

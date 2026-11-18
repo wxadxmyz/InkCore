@@ -28,8 +28,8 @@ def test_module_imports(appmod):
     assert hasattr(appmod, "route")
 
 
-def test_version_is_1_0_1(appmod):
-    assert appmod.APP_VERSION == "1.0.1"
+def test_version_is_1_1_0(appmod):
+    assert appmod.APP_VERSION == "1.1.0"
 
 
 # ---------- D1：parse_qs / urlparse ----------

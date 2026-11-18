@@ -13,6 +13,12 @@ import requests
 from flask import Flask, request, jsonify, send_from_directory, send_file, Response, stream_with_context
 from docx import Document
 import local_llm  # 本地内置模型（离线推理，无需 Ollama）
+# V2 工具内核（M2）：core 不依赖 app，工具实现由本文件注入
+from core.tools.registry import ToolSpec
+from core.tools.builtins import TOOL_DEFS, build_registry
+from core.tools.adapter import call_tools_llm, to_openai_tools
+from core.security.guard import safe_subpath
+from core.agent.tool_loop import run_agent
 
 # ---------- 路径（兼容打包后的 exe） ----------
 FROZEN = getattr(sys, "frozen", False)
@@ -62,10 +68,11 @@ DEFAULT_CONFIG = {
     "vision": {"enabled": False, "base_url": "https://api.openai.com/v1",
                "api_key": "", "model": "gpt-4o-mini"},
     "sandbox": {"readonly": False},
+    "agent": {"use_tool_calls": True, "max_tool_rounds": 1, "tool_timeout_default": 20},  # M2 工具协议开关
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "1.0.1"   # 自动更新比对用
+APP_VERSION = "1.1.0"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
@@ -747,6 +754,166 @@ def agent_run(goal, steps):
             log.append("\n— — —\n[Agent] 智能合成结果：\n"+r)
     log.append("\n[Agent] 完成。")
     return "\n".join(log)
+
+# ---------- V2 工具实现与装配（M2）----------
+# 统一工具返回契约：所有 run 都返回 {"ok":bool, "data":..., "error":str|None}
+def _tool_ok(data): return {"ok": True, "data": data, "error": None}
+def _tool_err(msg): return {"ok": False, "data": None, "error": str(msg)}
+
+# 工程工具允许访问的根目录（代码目录 + 用户数据目录）
+_TOOL_ROOTS = [APP_DIR, DATA_HOME]
+
+def _resolve_tool_path(p):
+    """把工具传入的路径解析到允许目录内，越界返回 None。"""
+    try:
+        return safe_subpath(p, _TOOL_ROOTS)
+    except Exception:
+        return None
+
+def tool_read_file(a):
+    path = _resolve_tool_path(a.get("path"))
+    if path is None: return _tool_err("路径越界或为空")
+    try:
+        if not path.is_file(): return _tool_err(f"不是文件：{path}")
+        raw = path.read_bytes()
+        if len(raw) > 200_000: return _tool_err("文件超过 200KB，请用 grep 按需检索")
+        return _tool_ok(raw.decode("utf-8", "replace"))
+    except Exception as e: return _tool_err(e)
+
+def tool_write_file(a):
+    path = _resolve_tool_path(a.get("path"))
+    if path is None: return _tool_err("路径越界或为空")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(a.get("content", ""), encoding="utf-8")
+        os.replace(tmp, path)
+        return _tool_ok(f"已写入 {path}（{len(a.get('content',''))} 字符）")
+    except Exception as e: return _tool_err(e)
+
+def tool_edit_file(a):
+    path = _resolve_tool_path(a.get("path"))
+    if path is None: return _tool_err("路径越界或为空")
+    old, new = a.get("old", ""), a.get("new", "")
+    if not old: return _tool_err("old 不能为空")
+    try:
+        if not path.is_file(): return _tool_err(f"不是文件：{path}")
+        text = path.read_text(encoding="utf-8")
+        cnt = text.count(old)
+        if cnt == 0: return _tool_err("未找到要替换的文本（old 不匹配）")
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        return _tool_ok(f"已替换 1 处（文件中共 {cnt} 处匹配）")
+    except Exception as e: return _tool_err(e)
+
+def tool_glob(a):
+    root = _resolve_tool_path(a.get("root") or str(APP_DIR))
+    if root is None: return _tool_err("搜索根目录越界")
+    try:
+        base = root if root.is_dir() else root.parent
+        pat = a.get("pattern", "")
+        hits = [str(p) for p in base.glob(pat) if p.is_file()]
+        hits += [str(p) for p in base.rglob(pat) if p.is_file() and p not in [Path(x) for x in hits]]
+        return _tool_ok("\n".join(hits[:200]) or "[无匹配文件]")
+    except Exception as e: return _tool_err(e)
+
+def tool_grep(a):
+    target = _resolve_tool_path(a.get("path") or str(APP_DIR))
+    if target is None: return _tool_err("路径越界")
+    pat = a.get("pattern", "")
+    if not pat: return _tool_err("pattern 不能为空")
+    use_re = bool(a.get("regex"))
+    try:
+        import fnmatch
+        rx = re.compile(pat) if use_re else None
+        files = [target] if target.is_file() else [
+            p for p in target.rglob("*")
+            if p.is_file() and ".git" not in p.parts and p.suffix in
+            {".py", ".js", ".json", ".md", ".txt", ".html", ".css", ".yml", ".yaml", ".toml", ""}
+        ]
+        lines = []
+        for f in files:
+            try:
+                for i, line in enumerate(f.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+                    hit = rx.search(line) if rx else (pat in line)
+                    if hit:
+                        lines.append(f"{f}:{i}:{line.strip()[:200]}")
+                        if len(lines) >= 200: break
+            except Exception:
+                continue
+            if len(lines) >= 200: break
+        return _tool_ok("\n".join(lines) or "[无匹配]")
+    except Exception as e: return _tool_err(e)
+
+def tool_list_dir(a):
+    path = _resolve_tool_path(a.get("path") or str(APP_DIR))
+    if path is None: return _tool_err("路径越界")
+    try:
+        if not path.is_dir(): return _tool_err(f"不是目录：{path}")
+        rows = []
+        for p in sorted(path.iterdir(), key=lambda x: x.name):
+            kind = "d" if p.is_dir() else "-"
+            size = "" if p.is_dir() else str(p.stat().st_size)
+            rows.append(f"{kind} {p.name}\t{size}")
+        return _tool_ok("\n".join(rows[:300]) or "[空目录]")
+    except Exception as e: return _tool_err(e)
+
+def tool_http_fetch(a):
+    url = a.get("url", "")
+    if not re.match(r"^https?://", url): return _tool_err("仅支持 http/https 网址")
+    try:
+        from bs4 import BeautifulSoup
+        r = requests.get(url, timeout=18, headers={"User-Agent": "Mozilla/5.0 InkCore-Agent"})
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        for tag in soup(["script", "style", "noscript"]): tag.decompose()
+        text = re.sub(r"\n{3,}", "\n\n", soup.get_text("\n", strip=True))
+        return _tool_ok(text[:50000] or "[页面无正文]")
+    except Exception as e: return _tool_err(e)
+
+# 把 app.py 现有函数包装成统一契约（迁移的 6 个工具）
+def _wrap_legacy(fn, key=None):
+    def _run(a):
+        try:
+            out = fn(a.get(key) or a.get("query") or a.get("prompt") or a.get("code") or a.get("command") or "")
+            if isinstance(out, dict) and "snippet" in out:
+                return _tool_ok(out["snippet"])
+            return _tool_ok("" if out is None else str(out))
+        except Exception as e:
+            return _tool_err(e)
+    return _run
+
+_TOOL_IMPLS = {
+    "search":     _wrap_legacy(web_search, "query"),
+    "image":      _wrap_legacy(lambda q: gen_image(q, "agent"), "prompt"),
+    "code":       _wrap_legacy(run_code, "code"),
+    "terminal":   _wrap_legacy(run_terminal, "command"),
+    "doc":        _wrap_legacy(retrieve_doc, "query"),
+    "write":      _wrap_legacy(lambda q: gen_writing(q, "agent"), "prompt"),
+    "read_file":  tool_read_file,
+    "write_file": tool_write_file,
+    "edit_file":  tool_edit_file,
+    "glob":       tool_glob,
+    "grep":       tool_grep,
+    "list_dir":   tool_list_dir,
+    "http_fetch": tool_http_fetch,
+}
+TOOL_REGISTRY = build_registry(_TOOL_IMPLS)  # 全局单例，13 个工具（app 注入实现）
+
+def _agent_fallback(step_text):
+    """关键词兜底：复用 M1 的 agent_step，返回 (tool_name, out)。"""
+    try:
+        name, out = agent_step(step_text)
+        return name, out
+    except Exception as e:
+        return None, f"[兜底失败] {e}"
+
+def agent_run_v2(goal, steps):
+    """M2 入口：走 tool_calls 循环；USE_TOOL_CALLS=False 时退回旧 agent_run。"""
+    if not config.get("agent", {}).get("use_tool_calls", True):
+        return {"reply": agent_run(goal, steps), "mode": "agent", "tool_trace": [], "used_llm": False}
+    cfg = get_llm_cfg()
+    return run_agent(goal, steps, registry=TOOL_REGISTRY, cfg=cfg,
+                     fallback_fn=_agent_fallback)
 
 # ---------- 意图路由 ----------
 WELCOME = ("我是**墨核 AI** 🐱，你的桌面智能助手：\n"
@@ -1635,7 +1802,8 @@ def api_check_update():
 def api_agent():
     d=request.json or {}; goal=d.get("goal",""); steps=d.get("steps",[])
     if not steps: return jsonify({"error":"empty steps"}),400
-    return jsonify({"reply":agent_run(goal, steps),"mode":"agent"})
+    res = agent_run_v2(goal, steps)
+    return jsonify(res)
 
 # ---------- 本地内置模型（离线推理，免 Ollama） ----------
 @app.route("/api/embedded/status")
