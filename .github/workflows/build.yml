@@ -81,8 +81,9 @@ jobs:
           Write-Host ("安装包版本已设为: " + $ver)
           & $iscc.FullName installer.iss
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::ISCC 编译 installer.iss 失败"; exit 1 }
-          $out = Get-ChildItem installer/InkCore_Setup_*.exe | Select-Object -First 1
-          if (-not $out) { Write-Host "::error::未生成 installer/InkCore_Setup_*.exe"; exit 1 }
+          $out = Get-ChildItem installer/InkCore-Setup.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $out) { $out = Get-ChildItem installer/InkCore_Setup_*.exe -ErrorAction SilentlyContinue | Select-Object -First 1 }
+          if (-not $out) { Write-Host "::error::未生成 installer/InkCore-Setup.exe"; exit 1 }
           New-Item -ItemType Directory -Force -Path release | Out-Null
           Copy-Item $out.FullName release/ -Force
           Write-Host ("已生成安装包：" + $out.FullName)
