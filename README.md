@@ -165,7 +165,7 @@ python app.py             # 纯网页版，浏览器访问 http://127.0.0.1:7860
 | 讲笑话 | 随机轻松一下 |
 | emoji 剧情 | 创意小玩法 |
 
-**v1.0.0 新增**：可以自己写 prompt **新建玩法**，存进本地 `funs.json`；支持 **整包导出 JSON** 分享给别人，也能 **导入** 别人的玩法包。玩法面板同样支持全屏。
+可以自己写 prompt **新建玩法**，存进本地 `funs.json`；支持 **整包导出 JSON** 分享给别人，也能 **导入** 别人的玩法包。玩法面板同样支持全屏。
 
 ---
 
@@ -186,7 +186,7 @@ python app.py             # 纯网页版，浏览器访问 http://127.0.0.1:7860
 | **本地内置模型** | Qwen2.5-1.5B-Instruct Q4 | **免 Ollama、零 Key、纯离线** |
 | **自定义** | 任意 OpenAI 兼容接口 | 填自己的 Base URL |
 
-### Key 管理（v1.0.0 改进）
+### Key 管理
 
 - **每家供应商独立记 Key** —— 切到 DeepSeek 再切回 OpenAI，两边的 Key 都还在，不会互相覆盖
 - **一键继承 Key** —— 勾上「继承主模型 Key」，生图和视觉模型直接复用对话模型的 Key 与 Base URL，省掉重复填三遍
@@ -203,7 +203,7 @@ python app.py             # 纯网页版，浏览器访问 http://127.0.0.1:7860
 
 > 后端把 `embedded://local` 视为零 Key 本地推理端点，`_llm_stream` / `_llm_complete` 统一分流：内置模型走 `local_llm.stream`，其余走 OpenAI 兼容 HTTP。流式 / 停止 / 编辑 / 导出 / 多标签全部原样可用；`llama_cpp` 缺失时输出可读错误而非崩溃。
 
-### Ollama 管理（v1.0.0 归位）
+### Ollama 管理
 
 Ollama 从独立面板挪进了 **设置 → 本地模型** tab，可以：刷新已装模型列表、一键切换为当前对话模型、拉取新模型、删除不用的权重。
 
@@ -239,7 +239,7 @@ Ollama 从独立面板挪进了 **设置 → 本地模型** tab，可以：刷�
 - **代码块一键复制**：悬浮右上角「复制」按钮
 - **文本朗读 (TTS)**：调用系统语音合成念出回复
 - **深色 / 浅色主题**：跟随喜好切换
-- **会话产物条**（v1.0.0 新增）：本轮生成的图片、小游戏以缩略图钉在输入框上方，点一下重新打开，可折叠
+- **会话产物条**：本轮生成的图片、小游戏以缩略图钉在输入框上方，点一下重新打开，可折叠
 
 ### 多用户与数据
 
@@ -263,20 +263,22 @@ Ollama 从独立面板挪进了 **设置 → 本地模型** tab，可以：刷�
 
 ---
 
-## v1.0.0 更新内容
+## 版本演进
 
-| # | 改动 | 说明 |
+当前版本 **v2.1.0**（2026-11-19）。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+| 版本 | 代号 | 核心内容 |
 |---|---|---|
-| 1 | **面板宽度统一 400px** | 删掉 340 / 392 的分档逻辑，所有抽屉一个宽度，视觉不再跳动 |
-| 2 | **全屏覆盖按钮** | 知识库 / 终端 / 代码 / Agent / 离谱玩法 五个工作型面板可一键铺满聊天区 |
-| 3 | **聊天自动唤起面板** | 说「写段代码并运行」自动生成 + 自动填入 + 自动全屏，Agent 与终端同理 |
-| 4 | **离谱玩法自建** | 新建 / 删除 / 导出 JSON / 导入 JSON，玩法可以自己攒也可以互相分享 |
-| 5 | **每供应商独立记 Key** | 切换供应商不再冲掉上一家的密钥，切回来自动回填 |
-| 6 | **新增免费聚合供应商** | SiliconFlow 与 OpenRouter，注册送额度，零成本起步 |
-| 7 | **继承 Key 到生图 / 视觉** | 一个勾选框省掉两次重复填写 |
-| 8 | **面板空状态引导** | 空面板不再是白板，给出说明与下一步提示 |
-| 9 | **会话产物条** | 生成过的图片 / 小游戏钉在输入框上方，点开即回看 |
-| 10 | **Ollama 并入设置** | 本地模型作为设置页的一个 tab，不再单占一个功能位 |
+| **v2.1.0** | 品牌与体验版 | 熊猫 logo 全面启用（软件图标 / 托盘 / 安装向导）；桌面窗口按屏幕工作区自适应，小笔记本不再被任务栏遮挡 |
+| **v2.0.0** | 生态版 | MCP 客户端（stdio / HTTP）、Skill 包规范（SKILL.md）、子 Agent 并行、SSE 协议定稿 |
+| **v1.4.0** | 安全版 | shlex 命令白名单 + 分级审批 + append-only 审计日志 + 代码执行隔离；8 类绕过全拦 |
+| **v1.3.0** | 上下文版 | Token 预算与滚动摘要、结构化记忆 v2、BM25 + bigram 混合检索与引用标注 |
+| **v1.2.0** | ReAct 版 | 多轮 ReAct 循环（失败自愈 / 变量传递 / 停止断点）、SSE 实时事件流、前端任务时间线 |
+| **v1.1.0** | 工具协议版 | Tool Registry + Function Calling，13 个工具、路径白名单护栏、观察—修正闭环 |
+| **v1.0.1** | 止血版 | 修复搜索链接 / 跑代码解释器 / PDF 解析 / 本地模型 Agent 四个严重缺陷，补测试与 CI |
+| v1.0.0 | 首发版 | 全能对话 + 写作 / 生图 / 联网 / 终端 / Agent + 多用户 + Markdown 编辑器 + 玩法自建 |
+
+> 每个版本都有 Git tag，可随时回滚：`v1.0.1` → `v1.1.0` → `v1.2.0` → `v1.3.0` → `v1.4.0` → `v2.0.0` → `v2.1.0`。
 
 ---
 
@@ -340,7 +342,7 @@ pyinstaller build.spec
 ```
 
 产物 `dist\InkCore.exe`（单文件，双击即用，原生窗口无浏览器）。
-再用 Inno Setup Compiler 编译 `installer.iss`，得到 `installer\InkCore_Setup_1.0.0.exe`。
+再用 Inno Setup Compiler 编译 `installer.iss`，得到 `installer\InkCore-Setup.exe`。
 
 或直接双击 `build_windows.bat` 一步到位。
 
@@ -349,7 +351,7 @@ pyinstaller build.spec
 推一个 tag 就行：
 
 ```bash
-git tag v1.0.0
+git tag v2.1.0
 git push --tags
 ```
 
@@ -382,7 +384,7 @@ python3 tools/build_gallery.py
 
 ```bat
 signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /a dist\InkCore.exe
-signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /a installer\InkCore_Setup_1.0.0.exe
+signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /a installer\InkCore-Setup.exe
 ```
 
 `build.yml` 里已预留签名步骤，取消注释并配置 `CERT_BASE64` / `CERT_PASSWORD` Secrets 即可。
@@ -435,7 +437,7 @@ signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /a install
 
 <div align="center">
 
-**墨核 AI Studio v1.0.0**
+**墨核 AI Studio v2.1.0**
 
 [功能画廊](https://wxadxmyz.github.io/InkCore/) ·
 [下载最新版](https://github.com/wxadxmyz/InkCore/releases/latest) ·
