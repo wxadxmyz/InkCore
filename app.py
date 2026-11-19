@@ -94,7 +94,7 @@ DEFAULT_CONFIG = {
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "2.1.0"   # 自动更新比对用
+APP_VERSION = "2.2.0"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
@@ -2099,6 +2099,59 @@ def api_mcp_refresh():
         return jsonify({"ok": True, "tools": names, "total": len(TOOL_REGISTRY)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+@app.route("/api/mcp/servers", methods=["POST", "DELETE"])
+def api_mcp_server_manage():
+    """新增 / 删除一个 MCP Server 配置（v2.2 前端入口需要）。"""
+    global config
+    mcp = config.setdefault("mcp", {})
+    servers = mcp.setdefault("servers", [])
+    if request.method == "POST":
+        d = request.json or {}
+        name = (d.get("name") or "").strip()
+        transport = (d.get("transport") or "stdio").strip().lower()
+        if not name:
+            return jsonify({"ok": False, "error": "名称不能为空"}), 400
+        if transport not in ("stdio", "http"):
+            return jsonify({"ok": False, "error": "transport 只能是 stdio 或 http"}), 400
+        if transport == "stdio":
+            cmd = d.get("command")
+            if isinstance(cmd, str):
+                cmd = cmd.split()
+            if not cmd or not isinstance(cmd, list) or not cmd[0]:
+                return jsonify({"ok": False, "error": "stdio 需要 command（如 npx -y @modelcontextprotocol/server-filesystem）"}), 400
+            entry = {"name": name, "transport": "stdio", "command": cmd,
+                     "cwd": (d.get("cwd") or "").strip() or None,
+                     "timeout": int(d.get("timeout") or 20)}
+        else:
+            url = (d.get("url") or "").strip()
+            if not url.startswith(("http://", "https://")):
+                return jsonify({"ok": False, "error": "HTTP 模式需要以 http(s):// 开头的地址"}), 400
+            entry = {"name": name, "transport": "http", "url": url,
+                     "headers": d.get("headers") or {},
+                     "timeout": int(d.get("timeout") or 20)}
+        # 同名覆盖
+        servers[:] = [s for s in servers if s.get("name") != name]
+        servers.append(entry)
+        _save(CONFIG_PATH, config)
+        _MCP_CLIENTS.pop(name, None)
+        try:
+            _refresh_mcp_registry()
+        except Exception:
+            pass   # 连接失败不影响配置已保存
+        return jsonify({"ok": True, "server": entry})
+    # DELETE
+    name = (request.args.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "缺少 name"}), 400
+    mcp["servers"] = [s for s in servers if s.get("name") != name]
+    _save(CONFIG_PATH, config)
+    _MCP_CLIENTS.pop(name, None)
+    try:
+        _refresh_mcp_registry()
+    except Exception:
+        pass
+    return jsonify({"ok": True})
 
 # ---------- Skill 包（M6） ----------
 @app.route("/api/skill/validate", methods=["POST"])

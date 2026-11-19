@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0",
-  "notes": "墨核 AI Studio v2.1.0 品牌与体验版：启用定版熊猫 logo 作为软件图标（PNG/多尺寸 ICO）与安装向导品牌图；桌面窗口改为按屏幕工作区自适应，自动避开任务栏，彻底解决小笔记本（1366×768 及以下）底部被遮挡的问题。",
+  "version": "2.2.0",
+  "notes": "墨核 AI Studio v2.2.0 界面精简与能力前置版：全新界面改版——顶栏合并精简、侧栏改为创作/知识与工具/扩展三组紧凑列表、配色收敛为单一紫色主色、欢迎区收敛为紧凑胶囊；补齐 M6 能力前端入口——新增 MCP 客户端、子 Agent 并行、SKILL.md 技能包三个面板（左侧带「新」角标），并打通两套技能系统；设置新增 MCP 页签，可直接添加/移除 MCP Server。",
   "url": "https://github.com/wxadxmyz/InkCore/releases/latest/download/InkCore-Setup.exe"
 }

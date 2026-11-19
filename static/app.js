@@ -47,6 +47,11 @@ const ICONS = {
   dot:'<circle cx="12" cy="12" r="5" fill="currentColor"/>',
   maximize:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   minimize:'<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
+  // v2.2 新增：MCP / 子 Agent / 技能包
+  plug:'<path d="M12 22v-5"/><path d="M9 8V2M15 8V2"/><path d="M18 8v4a6 6 0 0 1-12 0V8Z"/><path d="M6 8h12"/>',
+  bolt:'<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>',
+  package:'<path d="m7.5 4.3 9 5.2M21 16V8a2 2 0 0 0-1-1.7l-8-4.6a2 2 0 0 0-2 0L2 6.3A2 2 0 0 0 1 8v8a2 2 0 0 0 1 1.7l8 4.6a2 2 0 0 0 2 0l8-4.6A2 2 0 0 0 21 16Z"/><path d="m1 8 11 6 11-6M12 14v8"/>',
+  puzzle:'<path d="M10 3h4v2.5a2 2 0 1 1 3 1.7L19 10h-2.5a2 2 0 1 0 0 4H19l-2 2.8a2 2 0 1 1-1.7 3L14 17v3h-4v-3l-1.3 1.8a2 2 0 1 1-1.7-3L5 14h2.5a2 2 0 1 0 0-4H5l2-2.8a2 2 0 1 1 1.7-3L10 6z"/>',
 };
 function svg(name){
   const p = ICONS[name] || ICONS.chat;
@@ -676,13 +681,18 @@ const PANELS = {
   fun: renderFuns,
   settings: renderSettings,
   ollama: renderOllama,
+  // v2.2：M6 能力补前端入口
+  mcp: renderMcp,
+  subagent: renderSubagent,
+  skillpack: renderSkillPack,
 };
 async function openPanel(key){
   const titles={write:"写作",image:"AI 生图",prompt:"提示词",memory:"记忆",
-    knowledge:"知识库",skills:"技能",terminal:"终端",code:"代码",agent:"Agent",fun:"离谱玩法",ollama:"本地模型",settings:"设置"};
+    knowledge:"知识库",skills:"技能",terminal:"终端",code:"代码",agent:"Agent",fun:"离谱玩法",ollama:"本地模型",settings:"设置",
+    mcp:"MCP 客户端",subagent:"子 Agent 并行",skillpack:"技能包"};
   $("#panelTitle").textContent = titles[key]||"面板";
   // 仅工作型面板（知识库/终端/代码/Agent/离谱玩法）显示「全屏覆盖聊天区」按钮
-  const MAX_PANELS = new Set(["knowledge","terminal","code","agent","fun"]);
+  const MAX_PANELS = new Set(["knowledge","terminal","code","agent","fun","mcp","subagent","skillpack"]);
   $("#panelHead").dataset.max = MAX_PANELS.has(key) ? "1" : "0";
   $("#panel").classList.remove("fullscreen");   // 切换面板时退出全屏
   $("#panel").classList.remove("hidden");
@@ -693,6 +703,8 @@ async function openPanel(key){
   if(key==="memory") refreshMemory();
   if(key==="terminal") bindTerm();
   if(key==="knowledge") loadDocs();
+  if(key==="mcp") loadMcpServers();
+  if(key==="skillpack") loadSkillPacks();
 }
 function togglePanelMax(){
   const p = $("#panel");
@@ -715,6 +727,7 @@ function closeSettings(){ $("#settingsMask").classList.add("hidden"); }
 function switchSettingsTab(tab){
   $$("#settingsTabs .settings-tab").forEach(b=> b.classList.toggle("active", b.dataset.tab===tab));
   $$("#settingsBody .settings-section").forEach(s=> s.classList.toggle("active", s.dataset.section===tab));
+  if(tab==="mcp"){ loadMcpCfg(); setTimeout(switchMcpTransport, 0); }
 }
 function selectProvider(key, init){
   _settingsProvider = key;
@@ -895,6 +908,222 @@ async function uploadDoc(file){
   if(d.ok){ loadDocs(); }
   else { alert("上传失败："+(d.error||"未知错误")); }
 }
+
+// =========================================================
+// v2.2：M6 能力的前端入口（MCP / 子 Agent / SKILL.md 技能包）
+// =========================================================
+// ---------- MCP 客户端 ----------
+function renderMcp(){
+  return pHero('plug','MCP 客户端','连接外部 MCP Server（stdio / HTTP），它的工具会自动注册进 Agent 注册表，可直接被编排调用。')+
+    `<div class="pcard">
+      <div class="psec-title">已连接服务器</div>
+      <div id="mcpList" class="srv-list"><div class="empty-hint">加载中…</div></div>
+    </div>
+    <div class="pcard">
+      <div class="psec-title">操作</div>
+      <div class="pchips">
+        <button class="pchip" onclick="refreshMcp()">${ic('refresh')}刷新工具列表</button>
+        <button class="pchip" onclick="openSettings();switchSettingsTab('mcp')">${ic('plus')}添加 MCP Server</button>
+      </div>
+      <ul class="plist" style="margin-top:10px">
+        <li>在「设置 → MCP」里填写 stdio 命令或 HTTP 地址</li>
+        <li>刷新后工具即刻可用，Agent 无需改动即可调用</li>
+      </ul>
+    </div>`;
+}
+async function loadMcpServers(){
+  const box=$("#mcpList"); if(!box) return;
+  try{
+    const r=await fetch("/api/mcp/servers"); const d=await r.json();
+    const list=d.servers||[];
+    if(!list.length){
+      box.innerHTML='<div class="empty-hint">还没有配置 MCP Server<br>在「设置 → MCP」里添加一个（stdio 命令或 HTTP 地址）</div>';
+      return;
+    }
+    box.innerHTML = list.map(s=>`<div class="srv-row">
+      <span class="srv-dot ${s.ok?'':'off'}"></span>
+      <span class="srv-name">${s.name}<small>${s.transport}${s.ok?'':' · '+(s.error||'连接失败')}</small></span>
+      <span class="srv-tools">${s.ok? (s.tools.length+' 个工具') : '未连接'}</span>
+    </div>`).join("");
+  }catch(e){ box.innerHTML='<div class="empty-hint">加载失败：'+e.message+'</div>'; }
+}
+async function refreshMcp(){
+  try{
+    const r=await fetch("/api/mcp/refresh",{method:"POST"}); const d=await r.json();
+    if(d.ok) alert("已刷新，注入了 "+d.total+" 个工具。");
+    else alert("刷新失败："+(d.error||"未知错误"));
+  }catch(e){ alert("刷新失败："+e.message); }
+  loadMcpServers();
+}
+
+// ---------- MCP 设置（新增 / 删除服务器） ----------
+function switchMcpTransport(){
+  const t=$("#mcpTransport").value;
+  $("#mcpCmd").style.display = t==="stdio" ? "" : "none";
+  $("#mcpUrl").style.display  = t==="http"   ? "" : "none";
+}
+async function addMcpServer(){
+  const name=($("#mcpName").value||"").trim();
+  const transport=$("#mcpTransport").value;
+  if(!name){ alert("请填写名称"); return; }
+  const body={name:name, transport:transport};
+  if(transport==="stdio"){
+    body.command=($("#mcpCmd").value||"").trim();
+    if(!body.command){ alert("请填写命令"); return; }
+  }else{
+    body.url=($("#mcpUrl").value||"").trim();
+    if(!body.url){ alert("请填写 HTTP 地址"); return; }
+  }
+  try{
+    const r=await fetch("/api/mcp/servers",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!d.ok){ alert("添加失败："+(d.error||"未知错误")); return; }
+    $("#mcpName").value=""; $("#mcpCmd").value=""; $("#mcpUrl").value="";
+    loadMcpCfg();
+  }catch(e){ alert("添加失败："+e.message); }
+}
+async function delMcpServer(name){
+  if(!confirm("确定移除 MCP Server「"+name+"」？")) return;
+  try{
+    await fetch("/api/mcp/servers?name="+encodeURIComponent(name),{method:"DELETE"});
+    loadMcpCfg();
+  }catch(e){ alert("移除失败："+e.message); }
+}
+async function loadMcpCfg(){
+  const box=$("#mcpCfgList"); if(!box) return;
+  try{
+    const r=await fetch("/api/mcp/servers"); const d=await r.json();
+    const list=d.servers||[];
+    if(!list.length){ box.innerHTML='<div class="empty-hint">还没有配置 MCP Server</div>'; return; }
+    box.innerHTML=list.map(s=>`<div class="srv-row">
+      <span class="srv-dot ${s.ok?'':'off'}"></span>
+      <span class="srv-name">${s.name}<small>${s.transport}${s.ok?'':' · '+(s.error||'连接失败')}</small></span>
+      <span class="srv-tools">${s.ok?(s.tools.length+' 工具'):'未连接'}</span>
+      <button class="conv-act" title="移除" onclick="delMcpServer('${s.name}')">${ic('trash')}</button>
+    </div>`).join("");
+  }catch(e){ box.innerHTML='<div class="empty-hint">加载失败：'+e.message+'</div>'; }
+}
+
+// ---------- 子 Agent 并行 ----------
+function renderSubagent(){
+  return pHero('bolt','子 Agent 并行','把长任务拆成多个独立子任务并行执行，各自拥有独立上下文，主对话只收到结论摘要，不会被工具日志淹没。')+
+    `<div class="pcard">
+      <div class="psec-title">子任务（每行一个）</div>
+      <textarea class="code-area" id="subGoals" style="min-height:96px">搜索竞品最新资料
+整理用户评价
+生成对比表格</textarea>
+      <button class="btn" id="subRunBtn" style="margin-top:10px;display:inline-flex;align-items:center;justify-content:center;gap:6px" onclick="runSubagent()">${ic('bolt')}并行运行</button>
+    </div>
+    <div class="pcard">
+      <div class="psec-title">执行状态</div>
+      <div id="subTasks" style="margin-top:8px"><div class="empty-hint">等待运行…</div></div>
+    </div>
+    <div class="pcard">
+      <div class="psec-title">汇总摘要</div>
+      <div class="term-out" id="subOut" style="margin-top:8px">等待运行…</div>
+    </div>`;
+}
+async function runSubagent(){
+  const goals=$("#subGoals").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!goals.length){ alert("请先填写至少一个子任务"); return; }
+  const box=$("#subTasks"), out=$("#subOut");
+  box.innerHTML = goals.map(g=>`<div class="sub-task"><span class="st run"></span>
+    <span class="sub-goal">${g.replace(/</g,"&lt;")}</span><span class="sub-state run">运行中</span></div>`).join("");
+  out.textContent="并行执行中…";
+  try{
+    const r=await fetch("/api/subagent",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({goals:goals.map(g=>({goal:g}))})});
+    const d=await r.json();
+    if(!d.ok){ out.textContent="失败："+(d.error||"未知错误"); return; }
+    const results=d.results||[];
+    box.innerHTML = results.map((x,i)=>{
+      const ok=x.ok!==false;
+      const st=ok?"完成":(x.error||"失败");
+      return `<div class="sub-task"><span class="st ${ok?'':'err'}"></span>
+        <span class="sub-goal">${goals[i]||""}</span>
+        <span class="sub-state ${ok?'':'err'}">${st}</span></div>`;
+    }).join("");
+    out.textContent = d.summary || results.map(x=>x.summary||x.answer||"").join("\n\n") || "（无摘要）";
+  }catch(e){
+    out.textContent="请求失败："+e.message;
+    box.innerHTML = goals.map(g=>`<div class="sub-task"><span class="st err"></span>
+      <span class="sub-goal">${g}</span><span class="sub-state err">失败</span></div>`).join("");
+  }
+}
+
+// ---------- SKILL.md 技能包（与原有技能系统打通） ----------
+function renderSkillPack(){
+  return pHero('package','SKILL.md 技能包','标准化技能包：一份 SKILL.md（元数据 + 指令 + 可选脚本）打包成 zip，可导入导出分享。与左侧「技能」共用同一份技能库。')+
+    `<div class="pcard">
+      <div class="psec-title">已安装技能包</div>
+      <div id="packList" style="margin-top:8px"><div class="empty-hint">加载中…</div></div>
+    </div>
+    <div class="pcard">
+      <div class="psec-title">操作</div>
+      <div class="pchips">
+        <button class="pchip" onclick="$('#skillPackImport').click()">${ic('export')}导入 .zip</button>
+        <button class="pchip" onclick="exportSkillPack()">${ic('export')}导出选中</button>
+        <button class="pchip" onclick="validateSkillPack()">${ic('check')}校验 SKILL.md</button>
+      </div>
+      <textarea class="code-area" id="packText" style="min-height:84px;margin-top:10px"
+        placeholder="粘贴 SKILL.md 内容以校验：&#10;---&#10;name: my-skill&#10;description: 做什么的&#10;---&#10;指令正文…"></textarea>
+      <div id="packCheck" style="margin-top:8px"></div>
+    </div>
+    <ul class="plist">
+      <li>技能包与「技能」面板共用 skills.json，装一次两处都能用</li>
+      <li>导出得到 .zip，可直接发给别人导入</li>
+    </ul>`;
+}
+async function loadSkillPacks(){
+  const box=$("#packList"); if(!box) return;
+  try{
+    const r=await fetch("/api/skills"); const list=await r.json();
+    if(!list.length){ box.innerHTML='<div class="empty-hint">还没有技能<br>导入一个 .zip 技能包，或在「技能」面板里新建</div>'; return; }
+    box.innerHTML = list.map(s=>`<div class="pack-row">
+      <span class="pk-i">${ic('package')}</span>
+      <span class="pack-name">${s.name}<small>${s.desc||""}</small></span>
+      <span class="srv-tools">${s.version||"1.0"}</span>
+      <button class="conv-act" title="导出为 .zip" onclick="exportSkillPack('${s.id}')">${ic('export')}</button>
+    </div>`).join("");
+  }catch(e){ box.innerHTML='<div class="empty-hint">加载失败：'+e.message+'</div>'; }
+}
+async function exportSkillPack(id){
+  if(!id){ alert("请先在列表里点导出按钮，选择一个技能包"); return; }
+  try{
+    const r=await fetch("/api/skill/export",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id:id})});
+    if(!r.ok){ const e=await r.json().catch(()=>({})); alert("导出失败："+(e.error||r.status)); return; }
+    const blob=await r.blob();
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob); a.download=(id+".zip");
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ alert("导出失败："+e.message); }
+}
+async function validateSkillPack(){
+  const text=$("#packText").value; const box=$("#packCheck");
+  if(!text.trim()){ box.innerHTML='<div class="empty-hint">请先粘贴 SKILL.md 内容</div>'; return; }
+  try{
+    const r=await fetch("/api/skill/validate",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text:text})});
+    const d=await r.json();
+    if(d.ok){
+      const meta=(d.data&&d.data.name)?d.data:{};
+      box.innerHTML=`<div class="empty-hint" style="border-color:var(--mint);color:var(--mint)">校验通过：${meta.name||"未命名"} ${meta.version||""}</div>`;
+    }else{
+      const errs=(d.errors||[]).join("；")||d.error||"未知问题";
+      box.innerHTML=`<div class="empty-hint" style="border-color:var(--danger);color:var(--danger)">校验未通过：${errs}</div>`;
+    }
+  }catch(e){ box.innerHTML='<div class="empty-hint">校验失败：'+e.message+'</div>'; }
+}
+async function importSkillPack(file){
+  const fd=new FormData(); fd.append("file", file);
+  try{
+    const r=await fetch("/api/skill/import",{method:"POST",body:fd});
+    const d=await r.json();
+    if(d.ok){ alert("已导入技能包："+(d.skill&&d.skill.name||"未命名")); loadSkillPacks(); }
+    else alert("导入失败："+(d.error||"未知错误"));
+  }catch(e){ alert("导入失败："+e.message); }
+}
 async function delDoc(id){
   await fetch("/api/docs?id="+id,{method:"DELETE"}); loadDocs();
 }
@@ -907,7 +1136,9 @@ async function renderSkills(){
     <div class="pchips">
       <button class="pchip" onclick="$('#skillImport').click()">${ic('export')}导入 JSON</button>
       <button class="pchip" onclick="exportSkills()">${ic('export')}导出 JSON</button>
+      <button class="pchip" onclick="openPanel('skillpack')">${ic('package')}技能包</button>
     </div>
+    <div class="sett-tip" style="margin-top:10px">技能与「技能包」共用同一份技能库：这里的技能可用「导出 JSON」分享，也能在「技能包」面板里导出成 .zip 分享给他人。</div>
   </div>`;
   html += `<div class="pcard">
     <div class="psec-title">技能市场</div>
@@ -924,7 +1155,8 @@ async function renderSkills(){
     html += `<div class="skill-card"><div class="sc-top">${iconOrText(s.icon)} ${s.name}
       <span class="sc-del" onclick="delSkill('${s.id}')">删除</span></div>
       <div class="sc-desc">${s.desc}</div>
-      <div class="fun-list" style="font-size:11px">触发词：${(s.trigger||[]).join(" / ")} ｜ 类型：${s.type}</div></div>`;
+      <div class="fun-list" style="font-size:11px">触发词：${(s.trigger||[]).join(" / ")} ｜ 类型：${s.type}</div>
+      <div style="margin-top:6px"><button class="conv-act" style="color:var(--accent);display:inline-flex;align-items:center;justify-content:center" title="导出为 SKILL.md 技能包(.zip)" onclick="exportSkillPack('${s.id}')">${ic('package')}导出技能包</button></div></div>`;
   });
   html += `</div></div>`;
   html += `<div class="pcard">
@@ -1164,6 +1396,27 @@ async function renderSettings(){
 
   <section class="settings-section" data-section="ollama">
     <div id="ollamaBox">${await renderOllama()}</div>
+  </section>
+
+  <section class="settings-section" data-section="mcp">
+    <div class="sett-tip">MCP（Model Context Protocol）让你接入外部工具服务。stdio 模式填写可执行命令，HTTP 模式填写服务地址。保存后在「MCP」面板刷新即可使用。</div>
+    <div class="pcard" style="margin-top:12px">
+      <div class="psec-title">新增服务器</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="field" id="mcpName" placeholder="名称，如 filesystem" style="flex:1;min-width:120px;margin:0">
+        <select class="field" id="mcpTransport" style="width:120px;margin:0">
+          <option value="stdio">stdio</option>
+          <option value="http">http</option>
+        </select>
+      </div>
+      <input class="field" id="mcpCmd" placeholder="命令，如 npx -y @modelcontextprotocol/server-filesystem ." style="margin:8px 0 0">
+      <input class="field" id="mcpUrl" placeholder="HTTP 地址，如 http://127.0.0.1:3000/mcp" style="margin:8px 0 0;display:none">
+      <button class="btn" style="margin-top:10px" onclick="addMcpServer()">${ic('plus')}添加 MCP Server</button>
+    </div>
+    <div class="pcard" style="margin-top:12px">
+      <div class="psec-title">已配置</div>
+      <div id="mcpCfgList" style="margin-top:8px"><div class="empty-hint">加载中…</div></div>
+    </div>
   </section>
 
   <section class="settings-section" data-section="about">
@@ -1473,6 +1726,9 @@ $("#settingsMask").addEventListener("click",(e)=>{ if(e.target===$("#settingsMas
 $("#settingsTabs").addEventListener("click",(e)=>{ const t=e.target.closest(".settings-tab"); if(t) switchSettingsTab(t.dataset.tab); });
 $("#profileSel").onchange=(e)=>switchProfile(e.target.value);
 $$(".nav-item").forEach(b=> b.onclick=()=>{
+  // 侧栏分组列表：点谁高亮谁（active 只在同一分组内切换视觉，其余清空）
+  $$(".nav-item").forEach(x=> x.classList.remove("active"));
+  b.classList.add("active");
   if(b.dataset.panel==="ollama"){ openSettings(); switchSettingsTab("ollama"); }
   else openPanel(b.dataset.panel);
 });
@@ -1500,6 +1756,7 @@ $("#visionInput").onchange=(e)=>{ const f=e.target.files[0]; if(f) sendVision(f)
 // 文件输入：知识库文档 / 技能导入
 $("#docInput").onchange=(e)=>{ const f=e.target.files[0]; if(f) uploadDoc(f); e.target.value=""; };
 $("#skillImport").onchange=(e)=>{ const f=e.target.files[0]; if(f) importSkills(f); e.target.value=""; };
+$("#skillPackImport").onchange=(e)=>{ const f=e.target.files[0]; if(f) importSkillPack(f); e.target.value=""; };
 
 // ---------- 拖拽：图片→视觉理解；文件→知识库 ----------
 const inputEl = $("#input");
