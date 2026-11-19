@@ -25,6 +25,9 @@ OutputBaseFilename=InkCore-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+; v2.1.0：品牌化安装界面——左侧竖幅大图 + 右上角小图标（熊猫）
+WizardImageFile=static\wizard-image.bmp
+WizardSmallImageFile=static\wizard-small.bmp
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64
 UninstallDisplayName={#MyAppName}

@@ -15,6 +15,44 @@ PORT = 7860
 URL = f"http://127.0.0.1:{PORT}"
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# ---- v2.1.0：窗口尺寸自适应屏幕工作区（避免小笔记本被任务栏遮挡） ----
+DESIGN_W, DESIGN_H = 1280, 820      # 设计基准尺寸（大屏上的原始大小）
+MIN_W, MIN_H = 960, 620             # 期望最小尺寸
+FIT_RATIO = 0.92                    # 最多占工作区的 92%
+FIT_MARGIN = 36                     # 再留出的边距像素
+
+def screen_workarea():
+    """返回屏幕工作区 (x, y, w, h)，Windows 上会扣除任务栏；失败返回 None。"""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+            class _RECT(ctypes.Structure):
+                _fields_ = [("left", wintypes.LONG), ("top", wintypes.LONG),
+                            ("right", wintypes.LONG), ("bottom", wintypes.LONG)]
+            r = _RECT()
+            # SPI_GETWORKAREA = 0x0030
+            if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(r), 0):
+                w, h = r.right - r.left, r.bottom - r.top
+                if w > 0 and h > 0:
+                    return r.left, r.top, w, h
+        except Exception:
+            pass
+    return None
+
+def compute_window_geometry(work_w, work_h, design_w=DESIGN_W, design_h=DESIGN_H,
+                            min_w=MIN_W, min_h=MIN_H, ratio=FIT_RATIO, margin=FIT_MARGIN):
+    """按工作区计算 (w, h, min_size)：保持设计宽高比、完整落在工作区内、min_size 不超过实际窗口。"""
+    avail_w = max(480, int(work_w * ratio) - margin)
+    avail_h = max(360, int(work_h * ratio) - margin)
+    w = min(design_w, avail_w)
+    h = min(design_h, avail_h)
+    scale = min(w / design_w, h / design_h)
+    w, h = int(design_w * scale), int(design_h * scale)
+    # min_size 不能大于窗口本身，否则部分 GUI 后端会报错
+    mw, mh = min(min_w, w), min(min_h, h)
+    return w, h, (mw, mh)
+
 def run_server():
     """用 waitress 提供并发能力（SSE 流式 + 普通请求互不阻塞）；缺失时回退 dev server。"""
     try:
@@ -144,9 +182,16 @@ if __name__ == "__main__":
         import webview
         # 注意：pywebview 6.x 的 create_window 没有 icon 参数（窗口图标会自动取页面 favicon），
         # 此前传 icon=... 会导致 TypeError 启动失败。保留静态资源供 favicon 使用即可。
+        area = screen_workarea()
+        if area and area[2] > 0 and area[3] > 0:
+            win_w, win_h, min_size = compute_window_geometry(area[2], area[3])
+            print(f"[窗口] 屏幕工作区 {area[2]}x{area[3]} → 窗口 {win_w}x{win_h}（自适应，避开任务栏）")
+        else:
+            win_w, win_h, min_size = DESIGN_W, DESIGN_H, (MIN_W, MIN_H)
+            print(f"[窗口] 未取到工作区，使用默认 {win_w}x{win_h}")
         webview.create_window(
             "墨核 AI Studio (InkCore) · 桌面智能助手",
-            URL, width=1280, height=820, min_size=(960, 620),
+            URL, width=win_w, height=win_h, min_size=min_size,
         )
         # 托盘 + 热键 放独立线程，避免阻塞 webview.start()
         threading.Thread(target=start_tray, daemon=True).start()
