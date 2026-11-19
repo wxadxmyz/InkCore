@@ -265,10 +265,11 @@ Ollama 从独立面板挪进了 **设置 → 本地模型** tab，可以：刷�
 
 ## 版本演进
 
-当前版本 **v2.2.0**（2026-11-19）。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v2.3.0**（2026-11-19）。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 | 版本 | 代号 | 核心内容 |
 |---|---|---|
+| **v2.3.0** | 暖调重设计版 | A 方案整体重做（墨灰暖调 + 单一墨紫 + 去描边 + 大留白）；修复 6 个缺陷（图标残缺 / 内置模型卡在下载中 / 打包缺 llama 原生库 / 图标错位 / 发送按钮丢图标 / 标签栏 ✕ 失效）；移除标签栏与对话头像；输入框加添加文件按钮；模型下载加国内镜像 |
 | **v2.2.0** | 界面精简与能力前置版 | 全新界面改版（顶栏精简 / 侧栏三组紧凑列表 / 单一紫主色 / 欢迎区收敛）；MCP、子 Agent、SKILL.md 技能包三个前端入口补齐；两套技能系统打通；设置新增 MCP 页签 |
 | **v2.1.0** | 品牌与体验版 | 熊猫 logo 全面启用（软件图标 / 托盘 / 安装向导）；桌面窗口按屏幕工作区自适应，小笔记本不再被任务栏遮挡 |
 | **v2.0.0** | 生态版 | MCP 客户端（stdio / HTTP）、Skill 包规范（SKILL.md）、子 Agent 并行、SSE 协议定稿 |
@@ -279,7 +280,7 @@ Ollama 从独立面板挪进了 **设置 → 本地模型** tab，可以：刷�
 | **v1.0.1** | 止血版 | 修复搜索链接 / 跑代码解释器 / PDF 解析 / 本地模型 Agent 四个严重缺陷，补测试与 CI |
 | v1.0.0 | 首发版 | 全能对话 + 写作 / 生图 / 联网 / 终端 / Agent + 多用户 + Markdown 编辑器 + 玩法自建 |
 
-> 每个版本都有 Git tag，可随时回滚：`v1.0.1` → `v1.1.0` → `v1.2.0` → `v1.3.0` → `v1.4.0` → `v2.0.0` → `v2.1.0` → `v2.2.0`。
+> 每个版本都有 Git tag，可随时回滚：`v1.0.1` → `v1.1.0` → `v1.2.0` → `v1.3.0` → `v1.4.0` → `v2.0.0` → `v2.1.0` → `v2.2.0` → `v2.3.0`。
 
 ---
 
@@ -352,7 +353,7 @@ pyinstaller build.spec
 推一个 tag 就行：
 
 ```bash
-git tag v2.2.0
+git tag v2.3.0
 git push --tags
 ```
 
@@ -438,7 +439,7 @@ signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /a install
 
 <div align="center">
 
-**墨核 AI Studio v2.2.0**
+**墨核 AI Studio v2.3.0**
 
 [功能画廊](https://wxadxmyz.github.io/InkCore/) ·
 [下载最新版](https://github.com/wxadxmyz/InkCore/releases/latest) ·

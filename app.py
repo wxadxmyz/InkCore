@@ -94,7 +94,7 @@ DEFAULT_CONFIG = {
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "2.2.0"   # 自动更新比对用
+APP_VERSION = "2.3.0"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
@@ -1076,7 +1076,7 @@ def save_checkpoint(session_id, ckpt):
         pass
 
 # ---------- 意图路由 ----------
-WELCOME = ("我是**墨核 AI** 🐱，你的桌面智能助手：\n"
+WELCOME = ("我是**墨核 AI** 🐼，你的桌面智能助手：\n"
            "- **自由聊天 / 问答 / 搜资料**（联网搜索真实信息）\n- **写作**：小说 / 剧本 / 文章 / 文案（这是我的强项）\n"
            "- **AI 生图 / 生图提示词**、**写代码**、**跑终端命令**\n- 载入 **Skill** 插件、调用 **记忆**、当 **Agent** 帮你做项目\n\n"
            "试试：「你都能帮我做什么」「搜索今天的热点」「写一段仙侠短篇，主角叫苏无尘」「画一张赛博朋克封面」\n"
@@ -1100,7 +1100,7 @@ def llm_classify(text, history, session_id=None):
     return None
 
 def clarify_prompt(text):
-    return ("🐱 我有点没 get 到你的意思～ 你大概是想做哪类事？直接选一个说就行：\n"
+    return ("🐼 我有点没 get 到你的意思～ 你大概是想做哪类事？直接选一个说就行：\n"
             "- **写点东西**：小说 / 公众号文章 / 文案 / 剧本\n"
             "- **出图**：AI 生图 / 生图提示词\n"
             "- **查资料**：联网搜索 / 读本地文档\n"
@@ -1166,7 +1166,7 @@ def route_by_intent(intent, text, session_id, history):
 def apply_persona(skill, session_id):
     personas[session_id]={"name":skill["name"],"content":skill["content"]}
     _save(profile_dir()/"personas.json", personas)
-    return f"🐱 已切换人设：**{skill['name']}**。\n{skill['content'][:60]}……\n（直接跟我说话即可，输入「退出角色扮演」结束）"
+    return f"🐼 已切换人设：**{skill['name']}**。\n{skill['content'][:60]}……\n（直接跟我说话即可，输入「退出角色扮演」结束）"
 def gen_from_skill(skill, text, session_id):
     if skill["id"]=="skill_naming":
         kinds=["苏","沈","陆","顾","叶","云","夜","白"]

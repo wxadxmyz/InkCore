@@ -656,3 +656,271 @@ textarea.field{resize:vertical;min-height:74px;line-height:1.6}
 .pack-name small{display:block;font-size:10.5px;color:var(--txt-3);margin-top:2px}
 .empty-hint{padding:14px;text-align:center;font-size:12px;color:var(--txt-3);
   border:1px dashed var(--line);border-radius:10px;line-height:1.7}
+
+/* =========================================================
+   v2.3 —— A 方案重设计：柔化暖调墨灰 + 单一墨紫 + 去描边靠层级
+   修复：图标与文字基线对齐 / 发送停止按钮图标 / 删除标签栏 / 去掉头像
+   ========================================================= */
+:root{
+  /* 墨灰暖调底色：偏暖的深灰紫，呼应「墨核」 */
+  --bg:#16151a;
+  --surface:#1c1a21;
+  --surface-2:#232128;
+  --elevated:#2b2932;
+  --panel:#1a181f;
+  --panel-2:#211f27;
+  --line:#2e2b36;
+  --line-soft:#3a3744;
+  --txt:#ece9f0;
+  --txt-2:#a49fb0;
+  --txt-3:#6f6a7c;
+  /* 单一强调色：墨紫 */
+  --accent:#8b7cf6;
+  --accent-2:#8b7cf6;
+  --accent-soft:rgba(139,124,246,.13);
+  --accent-line:rgba(139,124,246,.34);
+  --mint:#4fc7a8;
+  --mint-soft:rgba(79,199,168,.12);
+  --warn:#e0a95c;
+  --danger:#e07a7a;
+  --user:linear-gradient(135deg,#7d6ef0,#9d8cf8);
+  --shadow:0 12px 34px rgba(0,0,0,.36);
+  --shadow-soft:0 4px 14px rgba(0,0,0,.24);
+  --ease:cubic-bezier(.2,.7,.3,1);
+  --font-base:14px;
+}
+body{
+  background:var(--bg);
+  background-image:
+    radial-gradient(820px 460px at 8% -6%, rgba(139,124,246,.09), transparent 62%),
+    radial-gradient(760px 420px at 104% 2%, rgba(180,140,220,.055), transparent 58%);
+}
+/* 去掉整体冷蓝环境光，改暖调 */
+body::before{
+  background:
+    radial-gradient(760px 420px at 14% -10%, rgba(139,124,246,.07), transparent 60%),
+    radial-gradient(680px 380px at 100% 0%, rgba(196,152,120,.045), transparent 55%);
+}
+
+/* ---------- 图标与文字基线统一（修 v2.2 错位） ---------- */
+.ic{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+  width:18px;height:18px;color:inherit;vertical-align:middle;line-height:0}
+.ic svg{width:100%;height:100%;display:block}
+/* 所有可能含图标的控件统一用 flex 居中，避免基线错位 */
+.ghost-btn,.pchip,.chip,.btn,.head-btn,.art-toggle,.ck,.sett-prov,.doc-item .conv-acts,
+.conv-act,.tab-add,.tab-close,.wcard,.nav-item,.picon,.sett-status,.settings-title,
+.ob-opt,.skill-card .sc-top,.fun-list,.status,.export-wrap .head-btn{
+  display:inline-flex;align-items:center;gap:7px;
+}
+.ghost-btn,.head-btn,.chip,.pchip,.art-toggle,.btn{
+  justify-content:center;line-height:1.4;
+}
+.ghost-btn .ic,.head-btn .ic,.chip .ic,.pchip .ic,.art-toggle .ic,.btn .ic{width:15px;height:15px;flex:0 0 15px}
+.btn .ic{width:16px;height:16px;flex:0 0 16px}
+.chip .ic,.pchip .ic{width:14px;height:14px;flex:0 0 14px}
+
+/* ---------- 发送 / 停止按钮：图标必须可见（修裸 SVG 丢色 bug） ---------- */
+#sendBtn{display:inline-flex;align-items:center;justify-content:center;
+  width:36px;height:36px;flex:0 0 36px;border:none;border-radius:50%;
+  background:linear-gradient(135deg,#8b7cf6,#7a6ae8);color:#fff;font-size:16px;
+  cursor:pointer;box-shadow:0 6px 16px rgba(139,124,246,.28);transition:.16s var(--ease)}
+#sendBtn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+#sendBtn .ic{width:19px;height:19px;flex:0 0 19px;color:#fff}
+#sendBtn .ic svg{stroke:#fff}
+#sendBtn.stopping{background:linear-gradient(135deg,#e07a7a,#e9a45c);box-shadow:0 6px 16px rgba(224,122,122,.26)}
+#sendBtn.stopping .ic{width:17px;height:17px;flex:0 0 17px;color:#fff}
+#sendBtn.stopping .ic svg{stroke:#fff}
+
+/* ---------- 顶栏：更矮更透气 ---------- */
+.topbar{height:54px;flex:0 0 54px;background:rgba(26,24,31,.78);border-bottom:1px solid var(--line)}
+.brand-name{font-size:14.5px;font-weight:640}
+.brand-sub{display:none}
+.brand-ver{font-size:10px;color:var(--txt-3);border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-weight:500}
+.logo{width:30px;height:30px;border-radius:50%;box-shadow:0 4px 12px rgba(0,0,0,.32)}
+.status{font-size:11.5px;gap:6px;padding:4px 10px;border-radius:999px;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--txt-2)}
+.status-dot{width:6px;height:6px;background:var(--mint);box-shadow:0 0 7px rgba(79,199,168,.6)}
+.ghost-btn{background:transparent;border:1px solid var(--line);color:var(--txt-2);
+  padding:6px 11px;border-radius:9px;font-size:12.5px;transition:.16s var(--ease)}
+.ghost-btn:hover{border-color:var(--accent-line);color:var(--txt);background:var(--surface-2)}
+.ghost-btn.primary{background:linear-gradient(135deg,#8b7cf6,#7a6ae8);border-color:transparent;color:#fff;font-weight:600}
+.ghost-btn.icon-only{width:31px;height:31px;padding:0}
+.ghost-btn.icon-only .ic{width:15px;height:15px}
+
+/* ---------- 侧栏：靠层级不用描边 ---------- */
+.sidebar{width:216px;flex:0 0 216px;background:var(--panel);border-right:1px solid var(--line);padding:14px 10px;gap:16px}
+.side-section{margin-bottom:0}
+.side-title{font-size:10px;color:var(--txt-3);text-transform:none;letter-spacing:.9px;
+  margin:0 8px 7px;font-weight:600}
+.conv-search input{background:var(--surface);border:1px solid var(--line);color:var(--txt);
+  border-radius:9px;padding:7px 10px;font-size:12px}
+.conv-list{gap:2px;margin-top:8px}
+.conv-item{padding:7px 10px;border-radius:8px;font-size:12.3px;color:var(--txt-2);
+  background:transparent;border:1px solid transparent}
+.conv-item:hover{background:var(--surface-2);color:var(--txt);border-color:transparent}
+.conv-item.active{background:var(--surface-2);color:var(--txt);border-color:transparent}
+.nav-list{display:flex;flex-direction:column;gap:2px}
+/* 导航项：激活态才用强调色（强调色只用在一处） */
+.nav-item{flex-direction:row;align-items:center;justify-content:flex-start;gap:10px;
+  padding:7px 10px;border-radius:8px;border:1px solid transparent;background:transparent;
+  color:var(--txt-2);font-size:12.8px;cursor:pointer;text-align:left;width:100%;
+  transition:background .14s,color .14s}
+.nav-item .ic{width:17px;height:17px;flex:0 0 17px;color:var(--txt-3);transition:color .14s}
+.nav-item span{flex:1;font-size:12.8px;color:inherit}
+.nav-item:hover{background:var(--surface-2);color:var(--txt);border-color:transparent;transform:none;box-shadow:none}
+.nav-item:hover .ic{color:var(--txt-2)}
+.nav-item.active{background:var(--surface-2);color:var(--txt);border-color:transparent}
+.nav-item.active .ic{color:var(--accent)}
+.nav-item.active span{color:var(--txt)}
+.nav-new{font-size:9px;font-style:normal;color:var(--accent);background:var(--accent-soft);
+  padding:1px 6px;border-radius:5px;font-weight:700;letter-spacing:.3px;flex:0 0 auto}
+
+/* ---------- 聊天区：去掉头像，靠留白分层 ---------- */
+.chat-head{height:46px;flex:0 0 46px;padding:0 20px;gap:10px;border-bottom:1px solid var(--line);
+  background:rgba(22,21,26,.5)}
+#chatTitle{font-size:13.5px;font-weight:600}
+.chat-hint{font-size:10.5px;color:var(--txt-3);border:1px solid var(--line);padding:2px 9px;border-radius:999px;background:transparent}
+.head-btn{background:transparent;border:1px solid var(--line);color:var(--txt-2);
+  padding:5px 10px;border-radius:8px;font-size:12px}
+.messages{padding:26px 0;gap:20px}
+/* 消息不再有头像：整行左对齐，靠留白区分 */
+.msg{max-width:760px;margin:0 auto;width:100%;padding:0 24px;gap:0;
+  align-items:stretch;animation:fade .26s var(--ease)}
+.msg.user{justify-content:flex-end}
+.msg .avatar{display:none !important}   /* v2.3：去掉头像 */
+.bubble{background:var(--surface-2);border:none;padding:12px 16px;border-radius:14px;
+  border-top-left-radius:4px;max-width:640px;line-height:1.75;font-size:13.3px;
+  white-space:pre-wrap;word-break:break-word;box-shadow:none}
+.msg.user .bubble{background:linear-gradient(135deg,#7d6ef0,#9182f5);color:#fff;
+  border-radius:14px;border-top-left-radius:14px;border-top-right-radius:4px;max-width:min(620px,86%)}
+.msg.user{margin-left:auto;margin-right:auto;padding-right:24px;padding-left:24px}
+
+/* 思考中 / 来源块的旧头像也一并隐藏 */
+.msg .avatar,.wrap .avatar{display:none}
+
+/* ---------- 欢迎区：更留白 ---------- */
+.welcome{max-width:600px;margin:20px auto 4px;padding:0 20px;text-align:center;background:none;border:none;box-shadow:none}
+.welcome-logo{width:54px;height:54px;margin:0 auto 15px;border-radius:50%;box-shadow:0 8px 22px rgba(0,0,0,.32)}
+.welcome h1{font-size:22px;font-weight:700;letter-spacing:.2px;margin-bottom:8px;color:var(--txt)}
+.welcome-sub{color:var(--txt-2);font-size:12.8px;line-height:1.75;max-width:440px;margin:0 auto}
+.welcome-cards{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;justify-content:center}
+.wcard{flex-direction:row;align-items:center;gap:7px;padding:8px 13px;border-radius:999px;
+  background:var(--surface-2);border:none;cursor:pointer;transition:.16s var(--ease)}
+.wcard .ic{width:15px;height:15px;flex:0 0 15px;color:var(--txt-3)}
+.wcard b{font-size:12.5px;font-weight:500;color:var(--txt-2)}
+.wcard:hover{background:var(--elevated);transform:translateY(-1px);box-shadow:none}
+.wcard:hover .ic{color:var(--accent)}
+.wcard:hover b{color:var(--txt)}
+.chips{gap:8px;padding:2px 24px 12px;max-width:760px}
+.chip{background:var(--surface);border:1px solid var(--line);color:var(--txt-2);
+  padding:6px 12px;border-radius:999px;font-size:12px;cursor:pointer;transition:.16s}
+.chip:hover{border-color:transparent;background:var(--surface-2);color:var(--txt)}
+
+/* ---------- 输入区：更圆、更多留白 ---------- */
+.input-bar{padding:12px 24px 20px;max-width:760px}
+.input-wrap{background:var(--surface-2);border:1px solid var(--line);border-radius:16px;
+  padding:7px 8px 7px 10px;gap:6px;box-shadow:none;transition:.18s var(--ease)}
+.input-wrap:focus-within{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-soft)}
+#input{font-size:13.5px;padding:9px 6px;line-height:1.6}
+.io-btn{width:32px;height:32px;flex:0 0 32px;border-radius:9px;color:var(--txt-3);font-size:16px}
+.io-btn .ic{width:18px;height:18px}
+.io-btn:hover{background:var(--elevated);color:var(--txt-2)}
+#sendBtn{width:36px;height:36px;flex:0 0 36px}
+
+/* ---------- 右侧面板：去描边靠层级 ---------- */
+.panel{width:368px;flex:0 0 368px;background:var(--panel);border-left:1px solid var(--line)}
+.panel.hidden{margin-right:-369px}
+.panel-head{height:46px;flex:0 0 46px;padding:0 12px 0 16px;border-bottom:1px solid var(--line);
+  background:rgba(26,24,31,.7)}
+#panelTitle{font-size:13.5px;font-weight:640;color:var(--txt)}
+.panel-body{padding:14px;gap:12px}
+.pcard{background:var(--surface-2);border:none;border-radius:13px;padding:15px;box-shadow:none}
+.phero .picon{background:var(--accent-soft);color:var(--accent)}
+.phero .picon .ic{color:var(--accent)}
+.phero h4{font-size:13.5px}
+.phero p{font-size:12.3px}
+.psec-title{font-size:10px;color:var(--txt-3);margin-bottom:9px}
+.field{background:var(--surface);border:1px solid var(--line);color:var(--txt);border-radius:9px;
+  padding:9px 11px;font-size:12.3px}
+.pchip{background:var(--surface);border:1px solid var(--line);color:var(--txt-2);
+  padding:6px 11px;border-radius:999px;font-size:12px}
+.pchip:hover{border-color:transparent;background:var(--elevated);color:var(--txt)}
+.btn{background:linear-gradient(135deg,#8b7cf6,#7a6ae8);border:none;color:#fff;font-weight:600;
+  padding:9px 15px;border-radius:10px;font-size:12.8px;box-shadow:none}
+.btn.sec{background:var(--surface);border:1px solid var(--line);color:var(--txt-2)}
+.btn.sec:hover{background:var(--elevated);color:var(--txt)}
+.term-out{background:#131218;border:1px solid var(--line);border-radius:10px;padding:11px;font-size:12px}
+.srv-row{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.sub-task{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.pack-row{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.empty-hint{border:1px dashed var(--line);border-radius:10px;color:var(--txt-3)}
+
+/* ---------- 标签栏彻底移除（v2.3：与侧栏会话列表功能重复） ---------- */
+.tab-bar{display:none !important}
+
+/* ---------- 产物条 ---------- */
+.art-strip{padding:0 24px;max-width:760px;margin:0 auto;width:100%}
+.art-toggle{background:var(--surface);border:1px solid var(--line);color:var(--txt-2);
+  padding:5px 11px;border-radius:999px;font-size:11.5px}
+.art-toggle:hover{border-color:transparent;background:var(--surface-2);color:var(--txt)}
+
+/* ---------- v2.3 补充：头像彻底隐藏 ---------- */
+.avatar-hidden{display:none !important}
+.msg .avatar,.wrap .avatar,.bubble + .avatar{display:none !important}
+
+/* ---------- v2.3 补充：输入框附件按钮 ---------- */
+#attachBtn .ic{width:18px;height:18px}
+#attachBtn:hover .ic{color:var(--accent)}
+
+/* ---------- v2.3 补充：内置模型下载信息 ---------- */
+.emb-info{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.emb-info .row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-3)}
+.emb-info .row b{color:var(--txt-2);font-weight:500}
+.emb-src{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--txt-2);
+  background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+.emb-src i{width:5px;height:5px;border-radius:50%;background:var(--mint);display:block}
+.emb-src.official i{background:var(--warn)}
+
+/* ---------- v2.3 收尾：侧栏图标放大 + 聊天区留白优化 ---------- */
+.nav-item .ic{width:18px;height:18px;flex:0 0 18px;color:var(--txt-3)}
+.nav-item:hover .ic{color:var(--txt-2)}
+.nav-item.active .ic{color:var(--accent)}
+.nav-item{padding:8px 10px;gap:11px}
+.nav-item span{font-size:13px}
+/* 侧栏分组标题更透气 */
+.side-section{margin-bottom:4px}
+.side-title{margin:0 8px 8px;font-size:10.5px;letter-spacing:1.1px}
+/* 欢迎区上移一点，减少大片空白 */
+.messages{padding:20px 0 12px;gap:18px}
+.welcome{margin:14px auto 2px}
+.welcome-logo{width:56px;height:56px;margin-bottom:13px}
+.welcome h1{font-size:21px;margin-bottom:7px}
+.welcome-cards{margin-top:18px;gap:7px}
+.wcard{padding:7px 12px}
+.wcard .ic{width:16px;height:16px;flex:0 0 16px}
+/* 聊天头更简洁 */
+.chat-hint{display:none}
+
+/* ---------- v2.3 收尾2：消息操作区不再被挤成竖条 ---------- */
+/* .msg 是 flex 容器且 margin-left:auto，会把 .msg-acts 拉成并排的窄条。
+   v2.3：消息气泡靠右显示，但操作区仍独占整行并与气泡对齐。 */
+/* 消息容器改为纵向 flex：气泡在上、操作按钮在下，不再并排被挤成竖条 */
+.msg{max-width:760px;margin:0 auto;width:100%;padding:0 24px;gap:0;
+  flex-direction:column;align-items:flex-start}
+.msg.user{margin-left:auto;margin-right:auto;align-items:flex-end}
+.msg-acts{
+  display:flex;gap:4px;justify-content:flex-start;margin-top:5px;
+  padding:0;width:auto;max-width:100%;
+}
+.msg.user .msg-acts{justify-content:flex-end}
+/* 助手气泡靠左且不超宽 */
+.msg:not(.user) .bubble{align-self:flex-start}
+.msg.user .bubble{align-self:flex-end}
+.resend-btn{background:transparent;border:1px solid transparent;color:var(--txt-3);font-size:11px;
+  padding:3px 9px;border-radius:7px;cursor:pointer;transition:.15s}
+.resend-btn:hover{background:var(--surface-2);border-color:transparent;color:var(--txt-2)}
+/* 助手回复里的 emoji 换成中性文案（与整体克制的调性一致） */
+
+/* ---------- v2.3 最终覆盖：消息必须纵向排列 ---------- */
+.msg{flex-direction:column !important;align-items:flex-start}
+.msg.user{flex-direction:column !important;align-items:flex-end}

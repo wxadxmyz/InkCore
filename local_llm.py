@@ -20,6 +20,7 @@
 import os
 import sys
 import json
+import time
 import threading
 from pathlib import Path
 
@@ -29,6 +30,21 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 # 可选模型：默认 Qwen2.5-1.5B-Instruct Q4（中文好、体积小、CPU 可跑）。
 # 另提供 0.5B 作为低内存机器的备选。GGUF 源自 HuggingFace 官方 GGUF 仓库。
+#
+# v2.3.0：每个模型配「镜像源 + 官方源」两条下载通道。
+# 国内直连 huggingface.co 经常超时/极慢，先走 hf-mirror.com 镜像，
+# 镜像失败再自动回退官方源，两个都失败才报错。
+MIRROR_PREFIX = "https://hf-mirror.com/"
+_HF_PREFIX = "https://huggingface.co/"
+
+
+def _mirror_url(url):
+    """把 huggingface 官方地址换成国内镜像地址。"""
+    if url.startswith(_HF_PREFIX):
+        return MIRROR_PREFIX + url[len(_HF_PREFIX):]
+    return url
+
+
 MODELS = {
     "qwen2.5-1.5b-instruct-q4_k_m": {
         "label": "Qwen2.5-1.5B-Instruct (Q4，中文，≈1.1GB)",
@@ -54,11 +70,14 @@ _status = {
     "progress": 0.0,      # 0..1
     "downloaded_bytes": 0,
     "total_bytes": 0,
+    "speed": 0,           # 字节/秒（近期平均）
     "done": False,
     "error": None,
     "model": DEFAULT_MODEL,
     "llama_available": None,   # None=未知, True/False
     "path": None,
+    "source": "",         # 当前使用的下载源（mirror / official）
+    "attempts": [],       # 试过的源与结果，前端可展示
 }
 
 # 懒加载的 llama_cpp 实例（全局仅加载一次）
@@ -90,13 +109,17 @@ def get_status():
             "size": v.get("size")}
         for k, v in MODELS.items()
     }
-    # 探测 llama_cpp 是否可用（仅首次）
+    # 探测 llama_cpp 是否可用（仅首次，结果写回 _status，避免每次调用都重复 import）
     if s["llama_available"] is None:
         try:
             import llama_cpp  # noqa: F401
-            s["llama_available"] = True
-        except Exception:
-            s["llama_available"] = False
+            available = True
+        except Exception as e:
+            available = False
+            _set(llama_available=False, llama_error=str(e))
+        else:
+            _set(llama_available=True)
+        s["llama_available"] = available
     return s
 
 
@@ -105,53 +128,103 @@ def _set(**kw):
         _status.update(kw)
 
 
-def download(key=None, progress_cb=None):
-    """同步下载模型权重到 MODEL_DIR；通过 _status 暴露进度。可被后台线程调用。"""
-    import requests  # 延迟导入，减少启动负担
+def _reset_download_state(key, info, attempts):
+    """开始一次下载前，把所有进度/错误状态清干净（修 v2.2 永久「下载中」的 bug）。"""
+    _set(downloading=True, progress=0.0, downloaded_bytes=0,
+         total_bytes=int(info.get("size", 0) or 0),
+         done=False, error=None, model=key, speed=0,
+         source="", attempts=list(attempts))
 
+
+def _download_from(url, part, total_guess, progress_cb=None, timeout=30):
+    """从单个源下载。返回 (是否成功, 总字节数, 错误信息)。"""
+    import requests
+
+    headers = {"User-Agent": "InkCore"}
+    with requests.get(url, headers=headers, stream=True, timeout=timeout, allow_redirects=True) as r:
+        r.raise_for_status()
+        total = int(r.headers.get("Content-Length", total_guess) or 0)
+        have = 0
+        last_t = time.time()
+        last_bytes = 0
+        with open(part, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 256):
+                if not chunk:
+                    continue
+                f.write(chunk)
+                have += len(chunk)
+                # 速度：每 0.5 秒算一次平均
+                now = time.time()
+                if now - last_t >= 0.5:
+                    sp = int((have - last_bytes) / (now - last_t))
+                    last_t, last_bytes = now, have
+                    _set(speed=sp)
+                prog = (have / total) if total else 0.0
+                _set(downloaded_bytes=have, progress=min(1.0, prog))
+                if progress_cb:
+                    progress_cb(prog, have, total)
+    return True, total, None
+
+
+def download(key=None, progress_cb=None):
+    """下载模型权重到 MODEL_DIR。
+
+    v2.3.0：先走国内镜像（hf-mirror.com），失败自动回退官方源；
+    无论成功失败都复位 downloading 状态（修「永久下载中」）。
+    """
     key = _default_model_key(key)
     info = MODELS[key]
     dest = model_path(key)
     part = dest.with_suffix(dest.suffix + ".part")
-    _set(downloading=True, progress=0.0, downloaded_bytes=0, total_bytes=info.get("size", 0),
-         done=False, error=None, model=key, path=str(dest))
+    official = info["url"]
+    mirror = _mirror_url(official)
+    attempts = []
 
-    try:
-        headers = {"User-Agent": "InkCore"}
-        with requests.get(info["url"], headers=headers, stream=True, timeout=30, allow_redirects=True) as r:
-            r.raise_for_status()
-            total = int(r.headers.get("Content-Length", info.get("size", 0)) or 0)
-            _set(total_bytes=total)
-            have = 0
-            with open(part, "wb") as f:
-                for chunk in r.iter_content(chunk_size=1024 * 256):
-                    if not chunk:
-                        continue
-                    f.write(chunk)
-                    have += len(chunk)
-                    prog = (have / total) if total else 0.0
-                    _set(downloaded_bytes=have, progress=min(1.0, prog))
-                    if progress_cb:
-                        progress_cb(prog, have, total)
-        part.replace(dest)  # 原子替换，避免半截文件被当成已就绪
-        _set(downloading=False, done=True, progress=1.0, path=str(dest))
-        return True
-    except Exception as e:
-        _set(downloading=False, error=str(e))
-        # 清理半截文件
+    _reset_download_state(key, info, attempts)
+
+    # 依次尝试：镜像 → 官方
+    for label, url in (("mirror", mirror), ("official", official)):
+        if label == "official" and mirror == official:
+            continue    # 本身就是官方地址，不必重复尝试
         try:
-            if part.exists():
-                part.unlink()
-        except Exception:
-            pass
-        return False
+            _set(source=label)
+            ok, total, err = _download_from(url, part, info.get("size", 0), progress_cb)
+            if not ok:
+                raise RuntimeError(err or "下载失败")
+            attempts.append({"source": label, "ok": True})
+            part.replace(dest)   # 原子替换，避免半截文件被当成已就绪
+            _set(downloading=False, done=True, progress=1.0, path=str(dest),
+                 speed=0, source=label, attempts=attempts)
+            return True
+        except Exception as e:
+            attempts.append({"source": label, "ok": False, "error": str(e)})
+            _set(attempts=attempts)
+            # 清掉半截文件再试下一个源
+            try:
+                if part.exists():
+                    part.unlink()
+            except Exception:
+                pass
+            continue
+
+    # 两个源都失败
+    msg = attempts[-1].get("error", "未知错误") if attempts else "未知错误"
+    _set(downloading=False, error="下载失败：" + msg, progress=0.0,
+         downloaded_bytes=0, speed=0, attempts=attempts)
+    return False
 
 
 def start_download(key=None):
     """后台线程启动下载，立即返回。前端用 get_status() 轮询进度。"""
     if _status.get("downloading"):
         return False
-    t = threading.Thread(target=download, args=(key,), daemon=True)
+    def _worker():
+        try:
+            download(key)
+        except Exception as e:
+            # 兜底：线程内任何未捕获异常都要复位状态，否则前端会永远显示「下载中」
+            _set(downloading=False, error="下载失败：" + str(e), progress=0.0, speed=0)
+    t = threading.Thread(target=_worker, daemon=True)
     t.start()
     return True
 

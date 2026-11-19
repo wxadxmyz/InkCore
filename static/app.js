@@ -49,6 +49,7 @@ const ICONS = {
   minimize:'<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
   // v2.2 新增：MCP / 子 Agent / 技能包
   plug:'<path d="M12 22v-5"/><path d="M9 8V2M15 8V2"/><path d="M18 8v4a6 6 0 0 1-12 0V8Z"/><path d="M6 8h12"/>',
+  attach:'<path d="M21.4 11.1 12.3 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.1a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.1a1.8 1.8 0 0 1-2.6-2.6l8.5-8.4"/>',
   bolt:'<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>',
   package:'<path d="m7.5 4.3 9 5.2M21 16V8a2 2 0 0 0-1-1.7l-8-4.6a2 2 0 0 0-2 0L2 6.3A2 2 0 0 0 1 8v8a2 2 0 0 0 1 1.7l8 4.6a2 2 0 0 0 2 0l8-4.6A2 2 0 0 0 21 16Z"/><path d="m1 8 11 6 11-6M12 14v8"/>',
   puzzle:'<path d="M10 3h4v2.5a2 2 0 1 1 3 1.7L19 10h-2.5a2 2 0 1 0 0 4H19l-2 2.8a2 2 0 1 1-1.7 3L14 17v3h-4v-3l-1.3 1.8a2 2 0 1 1-1.7-3L5 14h2.5a2 2 0 1 0 0-4H5l2-2.8a2 2 0 1 1 1.7-3L10 6z"/>',
@@ -135,7 +136,7 @@ function buildMsg(role, html, imgObj, rawText, idx){
   wrap.className = "msg "+role;
   if(rawText!=null) wrap.dataset.text = rawText;
   wrap.dataset.idx = (idx!=null) ? idx : msgCount();
-  const av = document.createElement("div"); av.className="avatar"; av.textContent = role==="user"?"你":"墨";
+  const av = document.createElement("div"); av.className="avatar avatar-hidden"; av.setAttribute("aria-hidden","true");
   const bub = document.createElement("div"); bub.className="bubble";
   if(html){
     bub.innerHTML = html;
@@ -234,14 +235,14 @@ function toggleSpeak(btn){
 function appendSources(sources){
   if(!sources||!sources.length) return;
   const wrap=document.createElement("div"); wrap.className="msg assistant";
-  wrap.innerHTML=`<div class="avatar">源</div><div class="bubble"><div class="src-title">参考来源（${sources.length}）</div>`+
+  wrap.innerHTML=`<div class="avatar avatar-hidden" aria-hidden="true"></div><div class="bubble"><div class="src-title">参考来源（${sources.length}）</div>`+
     sources.map(s=>`<a class="src-link" href="${escapeHtml(s.url||'#')}" target="_blank" rel="noopener">${escapeHtml(s.title||s.url||'')} ↗</a>`).join("")+`</div>`;
   $("#messages").appendChild(wrap); $("#messages").scrollTop=$("#messages").scrollHeight;
 }
 function addGameCard(reply, path){
   const wrap = document.createElement("div");
   wrap.className="msg assistant";
-  wrap.innerHTML = `<div class="avatar">墨</div><div class="bubble">
+  wrap.innerHTML = `<div class="avatar avatar-hidden" aria-hidden="true"></div><div class="bubble">
     ${md(reply)}
     <div class="game-card">
       <span class="game-tag">可玩 HTML</span>
@@ -253,7 +254,7 @@ function addGameCard(reply, path){
 function thinking(){
   const wrap = document.createElement("div");
   wrap.className="msg assistant"; wrap.id="thinking";
-  wrap.innerHTML = '<div class="avatar">墨</div><div class="bubble">思考中<span class="dots"></span></div>';
+  wrap.innerHTML = '<div class="avatar avatar-hidden" aria-hidden="true"></div><div class="bubble">思考中<span class="dots"></span></div>';
   $("#messages").appendChild(wrap);
   $("#messages").scrollTop = $("#messages").scrollHeight;
 }
@@ -285,11 +286,13 @@ function setSessionModel(model){
 // ---------- 发送（流式 + 可停止） ----------
 function setSendState(kind, controller){
   const b=$("#sendBtn");
+  // v2.3：必须用 <i class="ic"> 包裹，裸 SVG 拿不到 #sendBtn .ic 的白色样式，
+  // 会变成「纯色圆块看不到图案」。
   if(kind==="stop"){
-    b.innerHTML=svg("stop"); b.title="停止生成（Esc）"; b.classList.add("stopping");
+    b.innerHTML=`<i class="ic">${svg("stop")}</i>`; b.title="停止生成（Esc）"; b.classList.add("stopping");
     b.onclick=()=>{ if(controller) controller.abort(); };
   }else{
-    b.innerHTML=svg("send"); b.title="发送"; b.classList.remove("stopping");
+    b.innerHTML=`<i class="ic">${svg("send")}</i>`; b.title="发送"; b.classList.remove("stopping");
     b.onclick=()=>send();
   }
 }
@@ -427,6 +430,24 @@ async function sendVision(file){
     addMsg("assistant", md(d.reply));
   }catch(e){ unthinking(); addMsg("assistant","视觉识别失败："+e.message); }
   busy=false;
+}
+
+// ---------- 附件：按类型自动分流（v2.3） ----------
+const _DOC_EXT = /\.(pdf|docx|txt|md|csv)$/i;
+async function handleAttach(file){
+  if(!file) return;
+  if(file.type && file.type.startsWith("image/")){
+    // 图片 → 视觉理解
+    await sendVision(file);
+    return;
+  }
+  if(_DOC_EXT.test(file.name)){
+    // 文档 → 入知识库（RAG），并提示用户可继续提问
+    await uploadDoc(file);
+    toast("已加入知识库：" + file.name + "，现在可以就它提问了");
+    return;
+  }
+  toast("暂不支持该类型：" + (file.name||"未知文件"));
 }
 
 // ---------- 会话列表（含删除/重命名/搜索） ----------
@@ -1305,7 +1326,7 @@ async function renderSettings(){
   const embModels = (emb.models && Object.entries(emb.models) || []).map(([k,v])=>
     `<option value="${k}" ${k===emb.model?'selected':''}>${v.label}${v.ready?' 已下载':''}</option>`).join("");
   const embStatTxt = emb.ready ? "模型已就绪，可离线使用"
-    : (emb.downloading ? `下载中 ${Math.round((emb.progress||0)*100)}%`
+    : (emb.downloading ? `下载中 ${Math.round((emb.progress||0)*100)}%${emb.source==="mirror"?"（国内镜像）":(emb.source==="official"?"（官方源）":"")}`
     : (emb.llama_available===false ? "未检测到本地推理引擎（打包版本自带；开发环境需 pip install llama-cpp-python）"
     : "尚未下载模型权重"));
   const provDesc = {openai:"官方 GPT 系列",deepseek:"深度求索 高性价比",qwen:"阿里通义千问",moonshot:"Kimi 长上下文",
@@ -1395,6 +1416,7 @@ async function renderSettings(){
   </section>
 
   <section class="settings-section" data-section="ollama">
+    <div class="sett-tip">本地内置模型无需 Ollama、零 Key、可完全离线。权重首次使用时自动下载（约 1.1GB），优先走国内镜像（hf-mirror.com），失败自动回退官方源；下载进度会显示当前使用的源与实时速度。</div>
     <div id="ollamaBox">${await renderOllama()}</div>
   </section>
 
@@ -1459,24 +1481,52 @@ async function downloadEmbedded(){
   catch(e){}
   pollEmbedded();
 }
+// v2.3：下载状态展示当前源（镜像/官方）、实时速度、已下载大小
+function _fmtSize(bytes){
+  const b = Number(bytes)||0;
+  if(b < 1024) return b + " B";
+  if(b < 1024*1024) return (b/1024).toFixed(0) + " KB";
+  if(b < 1024*1024*1024) return (b/1024/1024).toFixed(1) + " MB";
+  return (b/1024/1024/1024).toFixed(2) + " GB";
+}
+function _fmtSpeed(bps){
+  const s = Number(bps)||0;
+  if(s <= 0) return "—";
+  return _fmtSize(s) + "/s";
+}
 async function pollEmbedded(){
   const stat=document.getElementById('embStat'), bar=document.getElementById('embBar'),
         fill=document.getElementById('embBarFill'), btn=document.getElementById('embDl');
   let s={};
   try { s = await (await fetch('/api/embedded/status')).json(); } catch(e){ return; }
+  const srcName = s.source==="mirror" ? "国内镜像" : (s.source==="official" ? "官方源" : "");
   if(stat){
-    stat.textContent = s.ready ? "✅ 模型已就绪，可离线使用"
-      : (s.downloading ? `⏬ 下载中 ${Math.round((s.progress||0)*100)}%`
-      : (s.llama_available===false ? "⚠️ 未检测到本地推理引擎（打包版本自带；开发环境需 pip install llama-cpp-python）"
-      : "⬇️ 尚未下载模型权重"));
+    if(s.ready){
+      stat.textContent = "模型已就绪，可离线使用";
+    }else if(s.downloading){
+      const pct = Math.round((s.progress||0)*100);
+      stat.textContent = `下载中 ${pct}%` +
+        (srcName ? ` · ${srcName}` : "") +
+        ` · ${_fmtSize(s.downloaded_bytes)} / ${_fmtSize(s.total_bytes)}` +
+        ` · ${_fmtSpeed(s.speed)}`;
+    }else if(s.llama_available===false){
+      stat.textContent = "未检测到本地推理引擎（打包版通常自带；开发环境需 pip install llama-cpp-python）";
+    }else{
+      stat.textContent = "尚未下载模型权重";
+    }
   }
   if(bar&&fill){ bar.style.display = s.downloading?'block':'none'; fill.style.width = Math.round((s.progress||0)*100)+'%'; }
   if(btn){
-    if(s.downloading){ btn.disabled=true; btn.textContent='下载中…'; }
-    else if(s.ready){ btn.disabled=true; btn.textContent='✅ 已就绪'; }
-    else { btn.disabled=false; btn.textContent='⬇️ 下载模型（约 1.1GB）'; }
+    if(s.downloading){ btn.disabled=true; btn.textContent = srcName ? `下载中（${srcName}）…` : '下载中…'; }
+    else if(s.ready){ btn.disabled=true; btn.textContent='已就绪'; }
+    else { btn.disabled=false; btn.textContent='下载模型（约 1.1GB）'; }
   }
-  if(s.error && stat){ stat.textContent='❌ 下载失败：'+s.error; if(btn){btn.disabled=false;btn.textContent='重试下载';} }
+  if(s.error && stat){
+    // 下载失败：明确告知镜像与官方源都已尝试
+    const tried = (s.attempts||[]).map(a=>a.source==="mirror"?"国内镜像":"官方源").join("、");
+    stat.textContent = '下载失败：' + s.error + (tried ? `（已尝试：${tried}）` : "");
+    if(btn){ btn.disabled=false; btn.textContent='重试下载'; }
+  }
   if(s.downloading){ if(!_embTimer) _embTimer=setInterval(pollEmbedded,800); }
   else { if(_embTimer){ clearInterval(_embTimer); _embTimer=null; } }
 }
@@ -1531,7 +1581,9 @@ async function exportXMind(){
   }catch(e){ alert("导出失败："+e.message); }
 }
 
-// ---------- 多会话标签页 ----------
+// ---------- 会话状态 ----------
+// v2.3：移除了顶部多会话标签栏（与左侧「最近对话」功能重复，且 ✕ 在只剩一个标签时静默失效）。
+// 现在只保留一个轻量状态槽，供标题/会话 id 同步用；历史会话一律走左侧列表。
 let TABS=[]; let activeTab=-1; let WELCOME_HTML="";
 function captureWelcome(){ const w=$("#messages .welcome"); if(w) WELCOME_HTML=w.outerHTML; }
 function rebindChips(){ $$("#messages .chip, #messages .wcard").forEach(c=> c.onclick=()=>send(c.dataset.cmd)); }
@@ -1542,53 +1594,21 @@ function renderWelcome(){
 function saveTabState(){
   if(activeTab>=0 && TABS[activeTab]){ TABS[activeTab].html=$("#messages").innerHTML; TABS[activeTab].session=SESSION; TABS[activeTab].model=SESSION_MODEL; }
 }
-function renderTabs(){
-  let bar=$("#tabBar");
-  if(!bar){ bar=document.createElement("div"); bar.id="tabBar"; bar.className="tab-bar";
-    const chat=$(".chat"); chat.insertBefore(bar, $("#messages")); }
-  bar.innerHTML="";
-  TABS.forEach((t,i)=>{
-    const el=document.createElement("div"); el.className="tab"+(i===activeTab?" active":""); el.title="切换标签";
-    const title=document.createElement("span"); title.className="tab-title"; title.textContent=t.title||"新对话"; el.appendChild(title);
-    const x=document.createElement("button"); x.className="tab-close"; x.textContent="×"; x.title="关闭标签";
-    x.onclick=(e)=>{ e.stopPropagation(); closeTab(i); }; el.appendChild(x);
-    el.onclick=()=>switchTab(i);
-    bar.appendChild(el);
-  });
-  const add=document.createElement("button"); add.className="tab-add"; add.textContent="+"; add.title="新建对话"; add.onclick=()=>newTab();
-  bar.appendChild(add);
-}
+// v2.3：不再渲染标签栏
+function renderTabs(){ /* 标签栏已移除，保留空实现以兼容既有调用点 */ }
 function initTabs(){
   TABS=[{id:"t"+Date.now(), session:null, title:"新对话", model:"", html:""}];
   activeTab=0; renderTabs();
 }
+// v2.3：标签栏已移除，「新对话」按钮改为直接开一个新会话（走侧栏会话体系）
 function newTab(){
   if(busy) return;
-  saveTabState();
-  TABS.push({id:"t"+Date.now(), session:null, title:"新对话", model:"", html:""});
-  activeTab=TABS.length-1;
   SESSION=null; APPLIED_MODEL=null; SESSION_MODEL=""; setSessionModel("");
-  $("#messages").innerHTML=""; renderWelcome(); $("#chatTitle").textContent="新的对话"; renderTabs();
+  $("#messages").innerHTML=""; renderWelcome(); $("#chatTitle").textContent="新的对话";
+  loadArtifacts(null);
 }
-function switchTab(i){
-  if(i===activeTab || busy) return;
-  saveTabState();
-  activeTab=i; const t=TABS[i];
-  SESSION=t.session; SESSION_MODEL=t.model||""; APPLIED_MODEL=t.model||"";
-  $("#messages").innerHTML=t.html||""; if(!t.html) renderWelcome();
-  $("#chatTitle").textContent=t.title||"对话"; setSessionModel(t.model||""); renderTabs();
-  loadArtifacts(SESSION);   // 改动12：切换 Tab 时同步产物条
-}
-function closeTab(i){
-  if(TABS.length<=1) return;
-  saveTabState();
-  TABS.splice(i,1);
-  if(i===activeTab){ activeTab=Math.min(i,TABS.length-1); const t=TABS[activeTab];
-    SESSION=t.session; SESSION_MODEL=t.model||""; setSessionModel(t.model||"");
-    $("#messages").innerHTML=t.html||""; if(!t.html) renderWelcome(); $("#chatTitle").textContent=t.title||"对话"; }
-  else if(i<activeTab){ activeTab--; }
-  renderTabs();
-}
+function switchTab(i){ /* 标签栏已移除，保留空实现以兼容既有调用点 */ }
+function closeTab(i){ /* 标签栏已移除，保留空实现以兼容既有调用点 */ }
 
 // ---------- Agent（服务端编排） ----------
 let stepN=0;
@@ -1752,6 +1772,9 @@ $("#convSearch").addEventListener("input", loadConvs);
 $("#voiceBtn").onclick=toggleVoice;
 $("#visionBtn").onclick=()=>{ if(busy){alert("请稍候，正在处理上一条消息…");return;} $("#visionInput").click(); };
 $("#visionInput").onchange=(e)=>{ const f=e.target.files[0]; if(f) sendVision(f); e.target.value=""; };
+// v2.3：输入框「添加文件」按钮 —— 图片走视觉理解，文档入知识库
+$("#attachBtn").onclick=()=>{ if(busy){alert("请稍候，正在处理上一条消息…");return;} $("#attachInput").click(); };
+$("#attachInput").onchange=(e)=>{ const f=e.target.files[0]; if(f) handleAttach(f); e.target.value=""; };
 
 // 文件输入：知识库文档 / 技能导入
 $("#docInput").onchange=(e)=>{ const f=e.target.files[0]; if(f) uploadDoc(f); e.target.value=""; };
@@ -1855,6 +1878,6 @@ injectIcons();          // 把 <i data-ic> 渲染成线性 SVG
 applyAppearance();      // 应用保存的主题 / 字号 / 缩放
 bindConfirm();          // 绑定执行前确认弹窗
 captureWelcome();       // 记录欢迎区 HTML，供「新建对话」标签复用
-initTabs();             // 初始化多会话标签页
+initTabs();             // v2.3：初始化会话状态（标签栏已移除）
 maybeOnboard();         // 未配置大模型时弹出首跑引导
 

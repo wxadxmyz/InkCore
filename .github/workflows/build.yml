@@ -50,6 +50,17 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Install llama-cpp-python (本地内置模型推理库, 失败不阻断构建)
+        continue-on-error: true
+        run: |
+          # llama-cpp-python 是 C++ 扩展，Windows 上若无编译器会安装失败。
+          # 装不上只是「内置模型」不可用，其余功能不受影响，因此不阻断构建。
+          python -m pip install llama-cpp-python --only-binary=:all: || `
+            python -m pip install llama-cpp-python || `
+            echo "::warning::llama-cpp-python 安装失败，本次构建不包含本地内置模型推理库"
+          python -c "import llama_cpp, os; print('llama_cpp OK ->', os.path.dirname(llama_cpp.__file__))" || `
+            echo "::warning::无法导入 llama_cpp，打包版将不含内置模型推理库"
+
       - name: Build single-file exe (PyInstaller)
         run: pyinstaller build.spec
 
