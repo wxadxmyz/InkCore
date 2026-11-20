@@ -924,3 +924,69 @@ body::before{
 /* ---------- v2.3 最终覆盖：消息必须纵向排列 ---------- */
 .msg{flex-direction:column !important;align-items:flex-start}
 .msg.user{flex-direction:column !important;align-items:flex-end}
+
+/* =========================================================
+   v2.4 —— 浅色暖调 A 方案（最终生效层，放在文件末尾统一覆盖）
+   用户反馈：深色主题不好看。这里把 A 方案从「暖调深墨灰」正式改为
+   「暖米白 + 单一墨紫 + 去描边 + 大留白」。所有 id/class 钩子保持不变。
+   仅需覆盖 :root 变量 + 少数写死的深色值（代码块 / 顶栏 / 气泡渐变）。
+   ========================================================= */
+:root{
+  --bg:#F6F3EF;          /* 暖米白页面底 */
+  --surface:#FFFFFF;     /* 纯白卡片 */
+  --surface-2:#F3EFE9;   /* 浅暖灰辅助面 */
+  --elevated:#EAE4DB;    /* hover 抬升 */
+  --panel:#FBF9F6;       /* 侧栏 */
+  --panel-2:#F3EFE9;
+  --line:#EBE5DC;        /* 极淡暖色描边（多数卡片已去描边） */
+  --line-soft:#E2DBD0;
+  --txt:#2C2A27;         /* 暖墨主文字 */
+  --txt-2:#6B655E;
+  --txt-3:#9A938A;
+  --accent:#6C5CE7;      /* 单一墨紫强调色 */
+  --accent-2:#6C5CE7;
+  --accent-soft:rgba(108,92,231,.10);
+  --accent-line:rgba(108,92,231,.30);
+  --mint:#2FA37E;
+  --mint-soft:rgba(47,163,126,.12);
+  --warn:#C9862B;
+  --danger:#D95858;
+  --user:linear-gradient(135deg,#6C5CE7,#7d6bf0);
+  --shadow:0 12px 34px rgba(70,58,44,.10);
+  --shadow-soft:0 4px 14px rgba(70,58,44,.07);
+}
+/* 顶栏 / 聊天头 / 面板头：写死的深色半透明改成暖白 */
+.topbar{background:rgba(255,255,255,.82)}
+.chat-head{background:rgba(255,255,255,.6)}
+.panel-head{background:rgba(251,249,246,.9)}
+/* 代码块：保留深色代码区（浅色界面里深色代码区是通用做法），文字提亮 */
+.bubble pre,.term-out,.term-in,.code-area{background:#2B2933;border-color:var(--line)}
+/* 欢迎标题：深色底专用的白蓝渐变在浅色底不可见，改暖墨色 */
+.welcome h1{color:var(--txt);background:none;-webkit-text-fill-color:currentColor}
+/* 引用块里的浅紫提示文字改深，保证浅底可读 */
+.tip{color:#4636B8}
+.game-tag{color:#4636B8}
+/* 导航激活态文字在浅底下用墨紫 */
+.nav-item.active .ic,.nav-item.active span{color:var(--accent)}
+/* 主按钮 / 发送按钮渐变统一为墨紫 */
+.ghost-btn.primary,.btn,#sendBtn{background:linear-gradient(135deg,#6C5CE7,#5A4AD4);color:#fff;border-color:transparent}
+#sendBtn .ic,#sendBtn .ic svg{color:#fff;stroke:#fff}
+/* 输入区在浅底上给一点白底和柔和阴影，突出层级 */
+.input-wrap{background:var(--surface);box-shadow:var(--shadow-soft)}
+/* 用户气泡白字保持（墨紫渐变底），无需改 */
+
+/* 用户主动选「暗色」时恢复深墨灰（暖调 A 的深色版），默认 warm 不受影响 */
+body[data-theme="dark"]{
+  --bg:#16151a; --surface:#1c1a21; --surface-2:#232128; --elevated:#2b2932;
+  --panel:#1a181f; --panel-2:#211f27; --line:#2e2b36; --line-soft:#3a3744;
+  --txt:#ece9f0; --txt-2:#a49fb0; --txt-3:#6f6a7c;
+  --accent:#8b7cf6; --accent-2:#8b7cf6;
+  --accent-soft:rgba(139,124,246,.13); --accent-line:rgba(139,124,246,.34);
+  --shadow:0 12px 34px rgba(0,0,0,.36); --shadow-soft:0 4px 14px rgba(0,0,0,.24);
+}
+body[data-theme="dark"] .topbar{background:rgba(26,24,31,.78)}
+body[data-theme="dark"] .chat-head{background:rgba(22,21,26,.5)}
+body[data-theme="dark"] .panel-head{background:rgba(26,24,31,.7)}
+body[data-theme="dark"] .welcome h1{background:linear-gradient(120deg,#fff,#cfe9ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+body[data-theme="dark"] .tip,body[data-theme="dark"] .game-tag{color:#c9bcff}
+body[data-theme="dark"] .input-wrap{background:var(--surface-2);box-shadow:none}

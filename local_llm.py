@@ -28,6 +28,30 @@ from pathlib import Path
 MODEL_DIR = Path(os.path.expanduser("~")) / "MoHeAI" / "models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
+# v2.4.0：GGUF 权重文件头魔数。仅靠「文件 > 1MB」判断就绪会误把镜像返回的错误页
+# 当成模型（体积够大），真正加载时 GGUF 解析失败，表现为「下载了却用不了」。
+GGUF_MAGIC = b"GGUF"
+# 下载成功后的回调（由 app.py 注册，用于自动把当前 provider 切到内置模型）
+_on_downloaded = None
+
+
+def set_on_downloaded(cb):
+    """注册下载成功回调 cb(model_key)，供 app.py 自动切换 provider。"""
+    global _on_downloaded
+    _on_downloaded = cb
+
+
+def _is_valid_gguf(path):
+    """校验是否为真正的 GGUF 权重：文件存在、体积合理、文件头为 b'GGUF'。"""
+    try:
+        p = Path(path)
+        if not p.exists() or p.stat().st_size <= 1_000_000:
+            return False
+        with open(p, "rb") as f:
+            return f.read(4) == GGUF_MAGIC
+    except Exception:
+        return False
+
 # 可选模型：默认 Qwen2.5-1.5B-Instruct Q4（中文好、体积小、CPU 可跑）。
 # 另提供 0.5B 作为低内存机器的备选。GGUF 源自 HuggingFace 官方 GGUF 仓库。
 #
@@ -96,8 +120,8 @@ def model_path(key=None):
 
 
 def is_ready(key=None):
-    p = model_path(key)
-    return p.exists() and p.stat().st_size > 1_000_000  # 排除明显不完整的文件
+    """模型是否真正可用：v2.4 起校验 GGUF 文件头，杜绝错误页/半截文件被误判就绪。"""
+    return _is_valid_gguf(model_path(key))
 
 
 def get_status():
@@ -191,10 +215,20 @@ def download(key=None, progress_cb=None):
             ok, total, err = _download_from(url, part, info.get("size", 0), progress_cb)
             if not ok:
                 raise RuntimeError(err or "下载失败")
+            # v2.4：下载完先校验文件头。镜像偶尔返回 HTML 错误页/拦截页，
+            # 体积可能 >1MB，必须确认是真 GGUF 才算成功，否则换下一个源重试。
+            if not _is_valid_gguf(part):
+                raise RuntimeError("下载内容不是有效的 GGUF 模型（可能是镜像返回的错误页）")
             attempts.append({"source": label, "ok": True})
             part.replace(dest)   # 原子替换，避免半截文件被当成已就绪
             _set(downloading=False, done=True, progress=1.0, path=str(dest),
                  speed=0, source=label, attempts=attempts)
+            # 下载成功后回调：自动把当前 provider 切到内置模型（v2.4）
+            if _on_downloaded:
+                try:
+                    _on_downloaded(key)
+                except Exception:
+                    pass
             return True
         except Exception as e:
             attempts.append({"source": label, "ok": False, "error": str(e)})

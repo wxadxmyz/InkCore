@@ -50,16 +50,33 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Install llama-cpp-python (本地内置模型推理库, 失败不阻断构建)
-        continue-on-error: true
+      # v2.4：内置模型推理库现在是「必须成功」的构建步骤。
+      # 之前 continue-on-error 导致装不上也照常发包，用户下载后模型能下但跑不起来。
+      # windows-latest 自带 MSVC Build Tools，wheel 缺失时可源码编译兜底；
+      # 最后强制 import 验证，任何失败都中止构建，绝不产出缺引擎的安装包。
+      - name: Install llama-cpp-python (本地内置模型推理库, 必须成功)
+        shell: pwsh
         run: |
-          # llama-cpp-python 是 C++ 扩展，Windows 上若无编译器会安装失败。
-          # 装不上只是「内置模型」不可用，其余功能不受影响，因此不阻断构建。
-          python -m pip install llama-cpp-python --only-binary=:all: || `
-            python -m pip install llama-cpp-python || `
-            echo "::warning::llama-cpp-python 安装失败，本次构建不包含本地内置模型推理库"
-          python -c "import llama_cpp, os; print('llama_cpp OK ->', os.path.dirname(llama_cpp.__file__))" || `
-            echo "::warning::无法导入 llama_cpp，打包版将不含内置模型推理库"
+          $ErrorActionPreference = "Stop"
+          Write-Host "优先安装预编译 wheel ..."
+          $wheelOk = $true
+          python -m pip install "llama-cpp-python>=0.2.0" --only-binary=:all:
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "预编译 wheel 不可用，尝试源码编译（windows-latest 自带 MSVC）..."
+            $wheelOk = $false
+            python -m pip install "llama-cpp-python>=0.2.0"
+          }
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::llama-cpp-python 安装彻底失败，中止构建（不再产出缺引擎的安装包）"
+            exit 1
+          }
+          # 强制验证：导入成功才算库真的可用
+          python -c "import llama_cpp, os; print('llama_cpp OK ->', os.path.dirname(llama_cpp.__file__))"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::无法导入 llama_cpp，打包版将无法运行内置模型，中止构建"
+            exit 1
+          }
+          Write-Host ("内置模型推理库已就绪（预编译 wheel: " + $wheelOk + "）")
 
       - name: Build single-file exe (PyInstaller)
         run: pyinstaller build.spec

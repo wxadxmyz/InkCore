@@ -1317,7 +1317,7 @@ function recordHotkey(btn){
 async function renderSettings(){
   const r = await fetch("/api/config"); const c = await r.json(); _settingsConfig = c;
   const l=c.llm||{}, im=c.image||{}, vi=c.vision||{}, sb=c.sandbox||{};
-  const curTheme = localStorage.getItem("mohe_theme")||"dark";
+  const curTheme = localStorage.getItem("mohe_theme")||"warm";
   const curFont = parseInt(localStorage.getItem("mohe_font")||"14",10);
   const curScale = parseInt(localStorage.getItem("mohe_scale")||"100",10);
   const hk = c.hotkey || "ctrl+alt+m";
@@ -1325,9 +1325,10 @@ async function renderSettings(){
   try { emb = await (await fetch("/api/embedded/status")).json(); } catch(e){ emb = {}; }
   const embModels = (emb.models && Object.entries(emb.models) || []).map(([k,v])=>
     `<option value="${k}" ${k===emb.model?'selected':''}>${v.label}${v.ready?' 已下载':''}</option>`).join("");
-  const embStatTxt = emb.ready ? "模型已就绪，可离线使用"
+  const embStatTxt = emb.error ? `⚠ ${emb.error}`
+    : emb.ready ? "✓ 模型已就绪，可直接对话（已自动切换为本地内置）"
     : (emb.downloading ? `下载中 ${Math.round((emb.progress||0)*100)}%${emb.source==="mirror"?"（国内镜像）":(emb.source==="official"?"（官方源）":"")}`
-    : (emb.llama_available===false ? "未检测到本地推理引擎（打包版本自带；开发环境需 pip install llama-cpp-python）"
+    : (emb.llama_available===false ? "⚠ 未检测到本地推理引擎：请卸载后重装最新版安装包（新版本已强制内置）"
     : "尚未下载模型权重"));
   const provDesc = {openai:"官方 GPT 系列",deepseek:"深度求索 高性价比",qwen:"阿里通义千问",moonshot:"Kimi 长上下文",
     glm:"智谱 GLM",ollama:"本机运行 零 Key",custom:"兼容 OpenAI 接口",embedded:"离线内置 免 Ollama"};
@@ -1392,8 +1393,8 @@ async function renderSettings(){
   <section class="settings-section" data-section="appearance">
     <div class="sett-h3">主题</div>
     <select class="sett-field" id="themeSel" onchange="setAppearance('theme',this.value)">
-      <option value="dark" ${'dark'===curTheme?'selected':''}>暗色（默认）</option>
-      <option value="light" ${'light'===curTheme?'selected':''}>亮色</option>
+      <option value="warm" ${'warm'===curTheme?'selected':''}>暖调墨紫（默认）</option>
+      <option value="dark" ${'dark'===curTheme?'selected':''}>暗色</option>
     </select>
     <div class="sett-h3" style="margin-top:6px">正文字号：<b id="fsVal">${curFont}</b>px</div>
     <input class="sett-range" type="range" id="fontSize" min="12" max="20" step="1" value="${curFont}" oninput="document.getElementById('fsVal').textContent=this.value;setAppearance('font',this.value)">
@@ -1501,18 +1502,26 @@ async function pollEmbedded(){
   try { s = await (await fetch('/api/embedded/status')).json(); } catch(e){ return; }
   const srcName = s.source==="mirror" ? "国内镜像" : (s.source==="official" ? "官方源" : "");
   if(stat){
-    if(s.ready){
-      stat.textContent = "模型已就绪，可离线使用";
+    if(s.error){
+      // v2.4：GGUF 校验失败 / 下载失败要醒目提示，不再默默显示「尚未下载」
+      stat.textContent = "⚠ " + s.error;
+      stat.style.color = "var(--danger)";
+    }else if(s.ready){
+      stat.textContent = "✓ 模型已就绪，可直接对话（已自动切换为本地内置）";
+      stat.style.color = "var(--mint)";
     }else if(s.downloading){
+      stat.style.color = "";
       const pct = Math.round((s.progress||0)*100);
       stat.textContent = `下载中 ${pct}%` +
         (srcName ? ` · ${srcName}` : "") +
         ` · ${_fmtSize(s.downloaded_bytes)} / ${_fmtSize(s.total_bytes)}` +
         ` · ${_fmtSpeed(s.speed)}`;
     }else if(s.llama_available===false){
-      stat.textContent = "未检测到本地推理引擎（打包版通常自带；开发环境需 pip install llama-cpp-python）";
+      stat.textContent = "⚠ 未检测到本地推理引擎：请卸载后重装最新版（新版已强制内置引擎）";
+      stat.style.color = "var(--warn)";
     }else{
       stat.textContent = "尚未下载模型权重";
+      stat.style.color = "";
     }
   }
   if(bar&&fill){ bar.style.display = s.downloading?'block':'none'; fill.style.width = Math.round((s.progress||0)*100)+'%'; }
@@ -1821,7 +1830,8 @@ function setAppearance(key,val){
   }catch(e){}
 }
 function applyAppearance(){
-  const t=localStorage.getItem("mohe_theme")||"dark";
+  // v2.4：默认暖调墨紫（浅色）。旧版默认 dark 导致每次打开都是深色。
+  const t=localStorage.getItem("mohe_theme")||"warm";
   document.body.setAttribute("data-theme",t);
   const fs=parseInt(localStorage.getItem("mohe_font")||"14",10);
   document.documentElement.style.setProperty("--font-base",fs+"px");

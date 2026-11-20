@@ -137,10 +137,15 @@ def test_build_spec_collects_llama_binaries():
     assert "binaries=_llama_binaries" in SPEC
 
 
-def test_ci_installs_llama_tolerantly():
+def test_ci_installs_llama_strictly():
+    """v2.4：llama 推理库改为必须成功，缺引擎不再产出安装包。"""
     yml = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
     assert "llama-cpp-python" in yml
-    assert "continue-on-error: true" in yml, "llama 安装失败不应阻断构建"
+    assert "continue-on-error: true" not in yml, "llama 安装失败必须阻断构建"
+    # 必须有强制 import 校验
+    block = yml.split("Install llama-cpp-python", 1)[1].split("Build single-file", 1)[0]
+    assert "import llama_cpp" in block
+    assert "exit 1" in block
 
 
 # ---------- 6) 图标对齐 ----------
@@ -210,10 +215,13 @@ def test_attach_routes_by_type():
 
 # ---------- 11) A 方案配色 ----------
 def test_warm_ink_palette():
-    assert "--bg:#16151a" in CSS, "底色应为墨灰暖调"
-    assert "--accent:#8b7cf6" in CSS, "强调色应为单一墨紫"
-    # 青色主色已移除（仅保留为状态色）
-    assert "--accent-2:#8b7cf6" in CSS
+    """v2.4：A 方案正式改为浅色暖调（暖米白底 + 单一墨紫）。"""
+    # 文件末尾的最终覆盖层应把底色改为暖米白
+    tail = CSS[CSS.rfind("v2.4 —— 浅色暖调 A 方案"):]
+    assert "--bg:#F6F3EF" in tail, "底色应为浅色暖米白"
+    assert "--accent:#6C5CE7" in tail, "强调色应为单一墨紫"
+    assert "--accent-2:#6C5CE7" in tail
+    assert "--surface:#FFFFFF" in tail, "卡片应为纯白"
 
 
 def test_a_scheme_removes_strokes():

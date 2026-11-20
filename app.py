@@ -94,7 +94,7 @@ DEFAULT_CONFIG = {
     "provider_keys": {},   # 各供应商各自记住的 key/base_url/model，切换不丢失
     "hotkey": "ctrl+alt+m",   # 全局热键（桌面端唤起/隐藏窗口），兼容 keyboard 库格式
 }
-APP_VERSION = "2.3.0"   # 自动更新比对用
+APP_VERSION = "2.4.0"   # 自动更新比对用
 UPDATE_URL_DEFAULT = "https://raw.githubusercontent.com/wxadxmyz/InkCore/main/version.json"  # 自动更新清单（替换为你的 GitHub 用户名；也可托管到自己的域名）
 def _load(path, default):
     try:
@@ -112,6 +112,23 @@ def _save(path, obj):
 
 config = _load(CONFIG_PATH, DEFAULT_CONFIG)
 def save_config(): _save(CONFIG_PATH, config)
+
+# v2.4：内置模型权重下载成功后，自动把当前 provider 切到 embedded 并持久化，
+# 这样用户下载完即可直接对话，不必再去「AI 提供商」里手动切换。
+def _on_embedded_downloaded(model_key):
+    prov = PROVIDERS["embedded"]
+    config["provider"] = "embedded"
+    config["llm"]["enabled"] = True
+    config["llm"]["base_url"] = prov["base_url"]
+    config["llm"]["model"] = model_key or prov["model"]
+    config["llm"]["api_key"] = ""
+    save_config()
+
+try:
+    import local_llm as _llm_mod
+    _llm_mod.set_on_downloaded(_on_embedded_downloaded)
+except Exception:
+    pass
 
 def profile_dir(name=None):
     name = name or config.get("active_profile", "default")
@@ -251,13 +268,27 @@ SYSTEM_CLASSIFY = ('你是意图分类器。仅回复一个 JSON：{"intent":"wr
                   'intent 取最匹配的一项；若用户需求模糊、无法判断要做什么，need_clarify 为 true。不要输出其他内容。')
 
 def get_llm_cfg(session_id=None):
-    """返回某会话生效的 LLM 配置：若该会话单独设置了 model，则在全局配置基础上覆盖模型名。"""
+    """返回某会话生效的 LLM 配置：若该会话单独设置了 model，则在全局配置基础上覆盖模型名。
+
+    v2.4：当全局 provider 为「本地内置模型」时，忽略会话里残留的云端模型名
+    （如 gpt-4o-mini）——否则内置推理会拿云端名去 MODELS 里找权重，找不到即失败，
+    表现就是「模型下载了却用不了」。内置模型只认 local_llm.MODELS 里登记的名字。
+    """
     cfg = dict(config["llm"])
     if session_id:
         conv = conversations.get(session_id)
         m = (conv or {}).get("model")
         if m:
-            cfg["model"] = m
+            is_embedded = (config.get("provider") == "embedded"
+                           or (cfg.get("base_url") or "").startswith("embedded://"))
+            if is_embedded:
+                import local_llm
+                # 会话模型名必须是内置模型登记表里的合法 key，否则忽略
+                if m in local_llm.MODELS:
+                    cfg["model"] = m
+                # 非法名（gpt-4o-mini 等云端残留）不覆盖，保留全局的内置模型名
+            else:
+                cfg["model"] = m
     return cfg
 
 def _auth_required(c):
