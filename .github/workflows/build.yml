@@ -156,6 +156,30 @@ jobs:
           Copy-Item 'packaging\软件介绍.txt' . -Force
           Compress-Archive -Path ($files.FullName) -DestinationPath release\InkCore-src.zip -Force
 
+      # v2.5：为每个产物额外生成「带版本号」的文件名（如 InkCore-Setup-v2.5.0.exe）。
+      # 固定名 + 版本号名各留一份：固定名保证 latest/download 固定链接不失效，
+      # 版本号名让用户下载后一眼看清版本，也便于本地同时保存多个版本。
+      - name: Create versioned asset names (固定名 + 版本号名并存)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.ver.outputs.version }}"
+          Write-Host ("生成带版本号 v" + $ver + " 的产物副本 ...")
+          $pairs = @(
+            @{ src = "release/InkCore-Setup.exe"; dst = "release/InkCore-Setup-v$ver.exe" },
+            @{ src = "dist/InkCore.exe";          dst = "release/InkCore-v$ver.exe" },
+            @{ src = "release/InkCore-win.zip";   dst = "release/InkCore-win-v$ver.zip" },
+            @{ src = "release/InkCore-src.zip";   dst = "release/InkCore-src-v$ver.zip" }
+          )
+          foreach ($p in $pairs) {
+            if (Test-Path $p.src) {
+              Copy-Item $p.src $p.dst -Force
+              Write-Host ("  已生成: " + $p.dst)
+            } else {
+              Write-Host ("::warning::缺少源文件 " + $p.src + "，跳过")
+            }
+          }
+
       - name: Upload artifacts (手动触发时也有产物可下)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
@@ -175,18 +199,26 @@ jobs:
           fail_on_unmatched_files: false
           body: |
             ## 墨核 AI Studio ${{ github.ref_name }}
-            - **InkCore-Setup.exe**：安装版（v${{ steps.ver.outputs.version }}），推荐大多数用户
-            - **InkCore.exe**：单文件版，双击即用（无需安装）
-            - **InkCore-win.zip**：免安装绿色版，解压即用，适合放 U 盘
-            - **InkCore-src.zip**：源码压缩包，可在 Python 环境直接运行
+            > 本次版本：**v${{ steps.ver.outputs.version }}**。每个产物提供两种文件名：
+            > **带版本号名**（如 InkCore-Setup-v${{ steps.ver.outputs.version }}.exe，便于辨识和同时保存多版本）
+            > 与**固定名**（如 InkCore-Setup.exe，固定下载链接始终指向最新版）。两者内容完全相同。
+
+            - **InkCore-Setup.exe** / InkCore-Setup-v${{ steps.ver.outputs.version }}.exe：安装版，推荐大多数用户
+            - **InkCore.exe** / InkCore-v${{ steps.ver.outputs.version }}.exe：单文件版，双击即用（无需安装）
+            - **InkCore-win.zip** / InkCore-win-v${{ steps.ver.outputs.version }}.zip：免安装绿色版，解压即用，适合放 U 盘
+            - **InkCore-src.zip** / InkCore-src-v${{ steps.ver.outputs.version }}.zip：源码压缩包，可在 Python 环境直接运行
             - 首次启动若选用「本地内置模型」，会自动下载约 1.1GB 量化权重，之后永久离线可用。
           files: |
             release/InkCore-win.zip
             release/InkCore-src.zip
+            release/InkCore-win-v${{ steps.ver.outputs.version }}.zip
+            release/InkCore-src-v${{ steps.ver.outputs.version }}.zip
             dist/InkCore.exe
+            release/InkCore-v${{ steps.ver.outputs.version }}.exe
             installer/InkCore-Setup.exe
             installer/InkCore_Setup_*.exe
             release/InkCore_Setup_*.exe
             release/InkCore-Setup.exe
+            release/InkCore-Setup-v${{ steps.ver.outputs.version }}.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
