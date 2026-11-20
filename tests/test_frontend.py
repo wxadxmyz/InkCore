@@ -26,15 +26,16 @@ def test_nav_has_mcp_subagent_skillpack_entries():
 
 
 def test_nav_entries_are_grouped():
-    # v2.5：1:1 还原预览，侧栏改为四组（最近对话/创作/智能体与工具/系统 扩展）
-    assert HTML.count('class="nav-list"') == 3, "功能导航应分为三组（创作/智能体与工具/系统）"
+    # v2.5：1:1 还原预览，侧栏四组（创作/智能体与工具/系统 扩展）+ v2.5.1 新增专业版组
+    assert HTML.count('class="nav-list"') == 4, "功能导航应分为四组（创作/智能体与工具/系统/专业版）"
     for group in ("创作", "智能体与工具"):
         assert f'<div class="side-title">{group}</div>' in HTML
     assert '<div class="side-title">系统 <small>扩展</small></div>' in HTML
+    assert '<div class="side-title">专业版 <small>垂直场景</small></div>' in HTML
 
 
 def test_new_entries_have_badge():
-    assert HTML.count('class="nav-new"') == 3, "三个新入口都应有「新」角标"
+    assert HTML.count('class="nav-new"') == 4, "三个新入口+专业版入口都应有「新」角标"
 
 
 def test_topbar_simplified():

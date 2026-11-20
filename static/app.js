@@ -53,6 +53,7 @@ const ICONS = {
   bolt:'<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>',
   package:'<path d="m7.5 4.3 9 5.2M21 16V8a2 2 0 0 0-1-1.7l-8-4.6a2 2 0 0 0-2 0L2 6.3A2 2 0 0 0 1 8v8a2 2 0 0 0 1 1.7l8 4.6a2 2 0 0 0 2 0l8-4.6A2 2 0 0 0 21 16Z"/><path d="m1 8 11 6 11-6M12 14v8"/>',
   puzzle:'<path d="M10 3h4v2.5a2 2 0 1 1 3 1.7L19 10h-2.5a2 2 0 1 0 0 4H19l-2 2.8a2 2 0 1 1-1.7 3L14 17v3h-4v-3l-1.3 1.8a2 2 0 1 1-1.7-3L5 14h2.5a2 2 0 1 0 0-4H5l2-2.8a2 2 0 1 1 1.7-3L10 6z"/>',
+  crown:'<path d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-1.5 10h-15L3 8z"/><path d="M6 21h12"/>',
 };
 function svg(name){
   const p = ICONS[name] || ICONS.chat;
@@ -362,7 +363,11 @@ async function send(text, opts){
   busy=false; setSendState("send");
 }
 // Esc 停止生成
-document.addEventListener("keydown", e=>{ if(e.key==="Escape" && busy && window.__abort) window.__abort.abort(); });
+document.addEventListener("keydown", e=>{
+  if(e.key!=="Escape") return;
+  if(!$("#proMask").classList.contains("hidden")){ closePro(); return; }
+  if(busy && window.__abort) window.__abort.abort();
+});
 
 // ---------- 改动12：会话级产物缩略图条 ----------
 async function loadArtifacts(sid){
@@ -1783,12 +1788,28 @@ $("#settingsClose").onclick=closeSettings;
 $("#settingsMask").addEventListener("click",(e)=>{ if(e.target===$("#settingsMask")) closeSettings(); });
 $("#settingsTabs").addEventListener("click",(e)=>{ const t=e.target.closest(".settings-tab"); if(t) switchSettingsTab(t.dataset.tab); });
 $("#profileSel").onchange=(e)=>switchProfile(e.target.value);
-$$(".nav-item").forEach(b=> b.onclick=()=>{
-  // 侧栏分组列表：点谁高亮谁（active 只在同一分组内切换视觉，其余清空）
-  $$(".nav-item").forEach(x=> x.classList.remove("active"));
-  b.classList.add("active");
-  if(b.dataset.panel==="ollama"){ openSettings(); switchSettingsTab("ollama"); }
-  else openPanel(b.dataset.panel);
+// 专业版弹窗（商业化入口）
+function openPro(){ $("#proMask").classList.remove("hidden"); }
+function closePro(){ $("#proMask").classList.add("hidden"); }
+$("#proEntry").onclick=(e)=>{ e.stopPropagation(); openPro(); };
+$("#proClose").onclick=closePro;
+$("#proMask").addEventListener("click",(e)=>{ if(e.target===$("#proMask")) closePro(); });
+$$(".pro-cta").forEach(b=> b.onclick=()=>{
+  const name=b.dataset.product;
+  closePro();
+  if(typeof toast==="function") toast(`${name} 独立产品即将上线，敬请期待`);
+  else alert(`${name} 独立产品即将上线，敬请期待`);
+});
+
+$$(".nav-item").forEach(b=>{
+  if(b.id==="proEntry") return;   // 专业版入口走自己的弹窗，不开功能面板
+  b.onclick=()=>{
+    // 侧栏分组列表：点谁高亮谁（active 只在同一分组内切换视觉，其余清空）
+    $$(".nav-item").forEach(x=> x.classList.remove("active"));
+    b.classList.add("active");
+    if(b.dataset.panel==="ollama"){ openSettings(); switchSettingsTab("ollama"); }
+    else openPanel(b.dataset.panel);
+  };
 });
 $$(".chip, .wcard").forEach(c=> c.onclick=()=>send(c.dataset.cmd));
 $$(".card[data-cmd]").forEach(c=> c.onclick=()=>send(c.dataset.cmd));       // v2.5：智能体卡片

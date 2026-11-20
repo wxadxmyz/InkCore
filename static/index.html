@@ -61,6 +61,11 @@
         <button class="nav-item" data-panel="code"><i class="ic" data-ic="code"></i><span>代码</span></button>
         <button class="nav-item" data-panel="ollama"><i class="ic" data-ic="server"></i><span>本地模型</span></button>
       </div>
+
+      <div class="side-title">专业版 <small>垂直场景</small></div>
+      <div class="nav-list">
+        <button class="nav-item pro-entry" id="proEntry"><i class="ic" data-ic="crown"></i><span>Writer / 律盾</span><em class="nav-new"> NEW</em></button>
+      </div>
     </aside>
 
     <!-- 中间：对话主界面 -->
@@ -99,8 +104,8 @@
           <div class="welcome-slogan"><span>AI 对话</span><span>AI 智能体</span><span>AI 工作流</span></div>
           <div class="welcome">
             <img src="/static/icon.png" class="welcome-logo" alt="墨核">
-            <h1>墨核 AI，<em>你的桌面助手</em></h1>
-            <p class="welcome-sub">本地私有、数据留本机 —— 聊天、问答、搜资料、写作、生图、写代码、跑命令，一个窗口全搞定。</p>
+            <h1>你的 AI，<em>装在自己电脑里</em></h1>
+            <p class="welcome-sub">数据不出本机、断网照样用、真能读写文件跑代码 —— 不是又一个套壳聊天窗，是把整台电脑变成你的 AI 工作台。</p>
           </div>
           <!-- 欢迎态：输入框嵌在内容流中（1:1 预览）；发消息后 JS 自动停靠到底部 -->
           <div id="composerHome" class="composer-home">
@@ -129,28 +134,28 @@
           </div>
           <!-- 智能体卡片区 -->
           <section class="agents" id="agentsSection">
-            <div class="agents-head"><h3><i class="ic" data-ic="agent"></i>智能体 · 常用能力</h3><span class="more" id="agentsMore">查看全部 ›</span></div>
+            <div class="agents-head"><h3><i class="ic" data-ic="agent"></i>你现在最想做的事</h3><span class="more" id="agentsMore">查看全部 ›</span></div>
             <div class="cards">
               <div class="card c1" data-cmd="你都能帮我做什么？">
-                <span class="badge">推荐</span>
+                <span class="badge">省时间</span>
                 <div class="card-ico"><i class="ic" data-ic="bulb"></i></div>
-                <h4>全能助手</h4>
-                <p>聊天、问答、搜资料、写文案，一个问题全都帮你搞定。</p>
-                <div class="meta"><span class="tag">对话</span><span>刚刚使用</span></div>
+                <h4>一句话，交出成品</h4>
+                <p>不用一步步教：说清要什么，稿子、方案、总结直接能交。</p>
+                <div class="meta"><span class="tag">写作</span><span>拿来即用</span></div>
               </div>
               <div class="card c2" data-cmd="帮我搜索知识库里的资料并总结">
-                <span class="badge">知识</span>
+                <span class="badge">不瞎编</span>
                 <div class="card-ico"><i class="ic" data-ic="knowledge"></i></div>
-                <h4>知识库问答</h4>
-                <p>把你的文档放进来，基于资料精准回答，答案有据可查。</p>
-                <div class="meta"><span class="tag">检索</span><span>本地知识</span></div>
+                <h4>吃透你自己的资料</h4>
+                <p>几百页文档丢进去，问一句就定位到原文第几页，答案有出处。</p>
+                <div class="meta"><span class="tag">溯源</span><span>数据不出机</span></div>
               </div>
               <div class="card c3" data-panel="code">
-                <span class="badge">工具</span>
+                <span class="badge">能动手</span>
                 <div class="card-ico"><i class="ic" data-ic="code"></i></div>
-                <h4>代码工作台</h4>
-                <p>写代码、跑命令、看结果，终端与代码能力本机安全执行。</p>
-                <div class="meta"><span class="tag">开发</span><span>本机执行</span></div>
+                <h4>不止给建议，真去跑</h4>
+                <p>代码和命令在本机安全执行，跑完把结果直接摆在你面前。</p>
+                <div class="meta"><span class="tag">执行</span><span>断网可用</span></div>
               </div>
             </div>
           </section>
@@ -256,6 +261,38 @@
       <div class="settings-foot">
         <button class="btn sec" id="settingsCancel">取消</button>
         <button class="btn" onclick="saveSettings()">保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 专业版：垂直产品矩阵 -->
+  <div class="modal-mask hidden" id="proMask">
+    <div class="modal pro-modal" id="proModal">
+      <div class="settings-head">
+        <div class="settings-title"><i class="ic" data-ic="crown"></i> 墨核专业版 · 为特定职业打造</div>
+        <button class="settings-close" id="proClose"><i class="ic" data-ic="close"></i></button>
+      </div>
+      <div class="pro-body">
+        <p class="pro-lead">同一个本地内核，为写作和法律场景深度定制。数据依旧不出本机。</p>
+        <div class="pro-grid">
+          <div class="pro-card">
+            <div class="pro-badge">写作向</div>
+            <div class="pro-ico" style="background:linear-gradient(135deg,#8b7cf6,#6c5ce7)"><i class="ic" data-ic="pen"></i></div>
+            <h4>墨核 Writer</h4>
+            <p>长篇小说创作助手。人物卡片、设定时间线、伏笔清单、一键回填 —— 写到第 50 章也不崩人设。</p>
+            <div class="pro-price">¥99 起 <small>买断</small></div>
+            <button class="pro-cta" data-product="墨核 Writer">了解详情</button>
+          </div>
+          <div class="pro-card">
+            <div class="pro-badge">法律向</div>
+            <div class="pro-ico" style="background:linear-gradient(135deg,#4C8FF7,#2F6FD0)"><i class="ic" data-ic="doc"></i></div>
+            <h4>律盾 LexShield</h4>
+            <p>律师案卷工作台。本地案卷库、引用溯源问答、文书起草、合同审查 —— 每个结论都能点回原文页码。</p>
+            <div class="pro-price">¥499 起 <small>买断</small></div>
+            <button class="pro-cta" data-product="律盾 LexShield">了解详情</button>
+          </div>
+        </div>
+        <p class="pro-foot">专业版为独立产品，功能更聚焦。点击「了解详情」查看介绍。</p>
       </div>
     </div>
   </div>
