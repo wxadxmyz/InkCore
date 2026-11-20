@@ -26,9 +26,11 @@ def test_nav_has_mcp_subagent_skillpack_entries():
 
 
 def test_nav_entries_are_grouped():
-    assert HTML.count('class="nav-list"') == 3, "侧栏应分为三组（创作/知识与工具/扩展）"
-    for group in ("创作", "知识与工具", "扩展"):
+    # v2.5：1:1 还原预览，侧栏改为四组（最近对话/创作/智能体与工具/系统 扩展）
+    assert HTML.count('class="nav-list"') == 3, "功能导航应分为三组（创作/智能体与工具/系统）"
+    for group in ("创作", "智能体与工具"):
         assert f'<div class="side-title">{group}</div>' in HTML
+    assert '<div class="side-title">系统 <small>扩展</small></div>' in HTML
 
 
 def test_new_entries_have_badge():
@@ -36,8 +38,8 @@ def test_new_entries_have_badge():
 
 
 def test_topbar_simplified():
-    # 顶栏：设置与编辑器改为纯图标按钮，新对话保留文字
-    assert 'class="ghost-btn icon-only" id="settingsBtn"' in HTML
+    # v2.5：1:1 还原预览——设置带文字、编辑器为图标按钮、新对话为主按钮
+    assert 'class="ghost-btn" id="settingsBtn"' in HTML
     assert 'class="ghost-btn icon-only" onclick="location.href=' in HTML
     assert 'class="ghost-btn primary" id="newChatBtn"' in HTML
     # 旧版把「编辑器」写成 emoji 文字，已换成 SVG 图标

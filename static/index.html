@@ -16,15 +16,15 @@
     <div class="brand">
       <img src="/static/icon.png" class="logo" alt="墨核">
       <div class="brand-text">
-        <div class="brand-name">墨核 AI <span class="brand-ver">v2.4</span></div>
-        <div class="brand-sub">桌面智能助手</div>
+        <div class="brand-name">墨核 AI <span class="brand-ver">v2.5</span></div>
+        <div class="brand-sub">桌面智能助手 · 本地私有</div>
       </div>
     </div>
     <div class="top-actions">
       <div class="status"><span class="status-dot" id="statusDot"></span><span class="status-text" id="statusText">本地引擎</span></div>
       <select id="profileSel" class="ghost-btn compact" title="切换/新建用户配置"></select>
-      <button class="ghost-btn icon-only" id="settingsBtn" title="设置（大模型/绘图/视觉 API）"><i class="ic" data-ic="settings"></i></button>
-      <button class="ghost-btn icon-only" onclick="location.href='/md'" title="Markdown 编辑器（双栏预览 / 多格式导出 / AI 润色）"><i class="ic" data-ic="edit"></i></button>
+      <button class="ghost-btn icon-only" onclick="location.href='/md'" title="Markdown 编辑器"><i class="ic" data-ic="edit"></i></button>
+      <button class="ghost-btn" id="settingsBtn" title="设置"><i class="ic" data-ic="settings"></i>设置</button>
       <button class="ghost-btn primary" id="newChatBtn"><i class="ic" data-ic="plus"></i>新对话</button>
     </div>
   </header>
@@ -32,98 +32,137 @@
   <div class="body">
     <!-- 左侧栏 -->
     <aside class="sidebar">
-      <div class="side-section">
-        <div class="side-title">最近对话</div>
-        <div class="conv-search"><input id="convSearch" placeholder="搜索对话…"></div>
-        <div id="convList" class="conv-list"></div>
+      <button class="newchat" id="sideNewChat"><i class="ic" data-ic="plus"></i>新对话</button>
+      <div class="conv-search"><i class="ic" data-ic="search"></i><input id="convSearch" placeholder="搜索对话…"></div>
+
+      <div class="side-title">最近对话</div>
+      <div id="convList" class="conv-list"></div>
+
+      <div class="side-title">创作</div>
+      <div class="nav-list">
+        <button class="nav-item" data-panel="write"><i class="ic" data-ic="write"></i><span>写作</span></button>
+        <button class="nav-item" data-panel="image"><i class="ic" data-ic="image"></i><span>AI 生图</span></button>
+        <button class="nav-item" data-panel="prompt"><i class="ic" data-ic="prompt"></i><span>提示词</span></button>
       </div>
-      <div class="side-section">
-        <div class="side-title">创作</div>
-        <div class="nav-list">
-          <button class="nav-item" data-panel="write"><i class="ic" data-ic="write"></i><span>写作</span></button>
-          <button class="nav-item" data-panel="image"><i class="ic" data-ic="image"></i><span>AI 生图</span></button>
-          <button class="nav-item" data-panel="prompt"><i class="ic" data-ic="prompt"></i><span>提示词</span></button>
-        </div>
+
+      <div class="side-title">智能体与工具</div>
+      <div class="nav-list">
+        <button class="nav-item" data-panel="memory"><i class="ic" data-ic="memory"></i><span>记忆</span></button>
+        <button class="nav-item" data-panel="knowledge"><i class="ic" data-ic="knowledge"></i><span>知识库</span></button>
+        <button class="nav-item" data-panel="skillpack"><i class="ic" data-ic="package"></i><span>技能包</span><em class="nav-new">新</em></button>
+        <button class="nav-item" data-panel="agent"><i class="ic" data-ic="agent"></i><span>Agent</span></button>
+        <button class="nav-item" data-panel="mcp"><i class="ic" data-ic="plug"></i><span>MCP</span><em class="nav-new">新</em></button>
+        <button class="nav-item" data-panel="subagent"><i class="ic" data-ic="bolt"></i><span>子 Agent</span><em class="nav-new">新</em></button>
       </div>
-      <div class="side-section">
-        <div class="side-title">知识与工具</div>
-        <div class="nav-list">
-          <button class="nav-item" data-panel="memory"><i class="ic" data-ic="memory"></i><span>记忆</span></button>
-          <button class="nav-item" data-panel="knowledge"><i class="ic" data-ic="knowledge"></i><span>知识库</span></button>
-          <button class="nav-item" data-panel="skillpack"><i class="ic" data-ic="package"></i><span>技能包</span><em class="nav-new">新</em></button>
-          <button class="nav-item" data-panel="terminal"><i class="ic" data-ic="terminal"></i><span>终端</span></button>
-          <button class="nav-item" data-panel="code"><i class="ic" data-ic="code"></i><span>代码</span></button>
-          <button class="nav-item" data-panel="agent"><i class="ic" data-ic="agent"></i><span>Agent</span></button>
-          <button class="nav-item" data-panel="mcp"><i class="ic" data-ic="plug"></i><span>MCP</span><em class="nav-new">新</em></button>
-          <button class="nav-item" data-panel="subagent"><i class="ic" data-ic="bolt"></i><span>子 Agent</span><em class="nav-new">新</em></button>
-        </div>
-      </div>
-      <div class="side-section">
-        <div class="side-title">扩展</div>
-        <div class="nav-list">
-          <button class="nav-item" data-panel="skills"><i class="ic" data-ic="skills"></i><span>技能</span></button>
-          <button class="nav-item" data-panel="fun"><i class="ic" data-ic="fun"></i><span>离谱玩法</span></button>
-          <button class="nav-item" data-panel="ollama"><i class="ic" data-ic="server"></i><span>本地模型</span></button>
-        </div>
+
+      <div class="side-title">系统 <small>扩展</small></div>
+      <div class="nav-list">
+        <button class="nav-item" data-panel="terminal"><i class="ic" data-ic="terminal"></i><span>终端</span></button>
+        <button class="nav-item" data-panel="code"><i class="ic" data-ic="code"></i><span>代码</span></button>
+        <button class="nav-item" data-panel="ollama"><i class="ic" data-ic="server"></i><span>本地模型</span></button>
       </div>
     </aside>
 
     <!-- 中间：对话主界面 -->
     <main class="chat">
       <div class="chat-head">
+        <div class="tabs"><button class="tab active">会话</button><button class="tab">空间</button></div>
         <span id="chatTitle">新的对话</span>
-        <select id="sessionModel" class="head-btn" title="为本对话单独选择模型（覆盖全局设置）">
-          <option value="">模型：默认</option>
-          <option value="gpt-4o-mini">gpt-4o-mini</option>
-          <option value="gpt-4o">gpt-4o</option>
-          <option value="gpt-4o-latest">gpt-4o-latest</option>
-          <option value="deepseek-chat">deepseek-chat</option>
-          <option value="moonshot-v1-8k">moonshot-v1-8k</option>
-          <option value="qwen-plus">qwen-plus</option>
-          <option value="llama3">llama3</option>
-        </select>
-        <span class="chat-hint">主界面 · 全能对话</span>
-        <div class="export-wrap">
-          <button class="head-btn" id="exportBtn"><i class="ic" data-ic="export"></i>导出 ▾</button>
-          <div class="export-menu hidden" id="exportMenu">
-            <div data-exp="docx">Word 文档</div>
-            <div data-exp="md">Markdown</div>
-            <div data-exp="pdf">PDF</div>
-            <div data-exp="wechat">公众号 HTML</div>
-            <div data-exp="longimg">拼成长图（PNG）</div>
-            <div data-exp="xmind">XMind 思维导图</div>
+        <div class="head-right">
+          <select id="sessionModel" class="head-btn" title="为本对话单独选择模型（覆盖全局设置）">
+            <option value="">模型：默认</option>
+            <option value="gpt-4o-mini">gpt-4o-mini</option>
+            <option value="gpt-4o">gpt-4o</option>
+            <option value="gpt-4o-latest">gpt-4o-latest</option>
+            <option value="deepseek-chat">deepseek-chat</option>
+            <option value="moonshot-v1-8k">moonshot-v1-8k</option>
+            <option value="qwen-plus">qwen-plus</option>
+            <option value="llama3">llama3</option>
+          </select>
+          <div class="export-wrap">
+            <button class="head-btn" id="exportBtn" title="导出对话"><i class="ic" data-ic="export"></i></button>
+            <div class="export-menu hidden" id="exportMenu">
+              <div data-exp="docx">Word 文档</div>
+              <div data-exp="md">Markdown</div>
+              <div data-exp="pdf">PDF</div>
+              <div data-exp="wechat">公众号 HTML</div>
+              <div data-exp="longimg">拼成长图（PNG）</div>
+              <div data-exp="xmind">XMind 思维导图</div>
+            </div>
           </div>
+          <div class="avatar-me">墨</div>
         </div>
       </div>
+
       <div id="messages" class="messages">
-        <div class="welcome">
-          <img src="/static/icon.png" class="welcome-logo" alt="墨核">
-          <h1>我是墨核 AI</h1>
-          <p class="welcome-sub">本地私有、数据留本机 —— 聊天、问答、搜资料、写作、生图、写代码、跑命令，一个窗口全搞定。</p>
-          <div class="welcome-cards">
-            <button class="wcard" data-cmd="你都能帮我做什么？"><i class="ic" data-ic="chat"></i><b>全能助手</b></button>
-            <button class="wcard" data-cmd="搜索今天 AI 领域的最新资讯"><i class="ic" data-ic="globe"></i><b>联网搜索</b></button>
-            <button class="wcard" data-cmd="写一段都市悬疑短篇，主角叫林默"><i class="ic" data-ic="pen"></i><b>写小说</b></button>
-            <button class="wcard" data-cmd="帮我写一篇公众号文章：如何高效阅读"><i class="ic" data-ic="doc"></i><b>写文章</b></button>
-            <button class="wcard" data-cmd="画一张赛博朋克封面"><i class="ic" data-ic="image"></i><b>AI 生图</b></button>
-            <button class="wcard" data-cmd="把这段英文翻译成中文：Hello, how are you?"><i class="ic" data-ic="translate"></i><b>翻译</b></button>
+        <div id="welcomeStage" class="welcome-stage">
+          <div class="welcome-slogan"><span>AI 对话</span><span>AI 智能体</span><span>AI 工作流</span></div>
+          <div class="welcome">
+            <img src="/static/icon.png" class="welcome-logo" alt="墨核">
+            <h1>墨核 AI，<em>你的桌面助手</em></h1>
+            <p class="welcome-sub">本地私有、数据留本机 —— 聊天、问答、搜资料、写作、生图、写代码、跑命令，一个窗口全搞定。</p>
           </div>
+          <!-- 欢迎态：输入框嵌在内容流中（1:1 预览）；发消息后 JS 自动停靠到底部 -->
+          <div id="composerHome" class="composer-home">
+            <div class="composer" id="composer">
+              <div class="input-wrap">
+                <button class="io-btn" id="voiceBtn" title="语音输入"><i class="ic" data-ic="voice"></i></button>
+                <button class="io-btn" id="visionBtn" title="发送图片（视觉理解）"><i class="ic" data-ic="vision"></i></button>
+                <button class="io-btn" id="attachBtn" title="添加文件（图片走视觉理解，文档入知识库）"><i class="ic" data-ic="attach"></i></button>
+                <textarea id="input" rows="1" placeholder="对我说点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+                <button id="sendBtn" title="发送"><i class="ic" data-ic="send"></i></button>
+              </div>
+              <div class="composer-foot">
+                <div class="deep-think" id="deepThink"><span class="switch"></span>深度思考（R1）</div>
+                <div class="composer-hint">Enter 发送 · Shift+Enter 换行</div>
+              </div>
+            </div>
+          </div>
+          <!-- 快捷提示词 -->
+          <div class="quick">
+            <button class="chip" data-cmd="你都能帮我做什么？"><i class="ic" data-ic="chat"></i>全能助手</button>
+            <button class="chip" data-cmd="搜索今天 AI 领域的最新资讯"><i class="ic" data-ic="globe"></i>联网搜索</button>
+            <button class="chip" data-cmd="写一段都市悬疑短篇，主角叫林默"><i class="ic" data-ic="pen"></i>写小说</button>
+            <button class="chip" data-cmd="帮我写一篇公众号文章：如何高效阅读"><i class="ic" data-ic="doc"></i>写文章</button>
+            <button class="chip" data-cmd="画一张赛博朋克封面"><i class="ic" data-ic="image"></i>AI 生图</button>
+            <button class="chip" data-cmd="把这段英文翻译成中文：Hello, how are you?"><i class="ic" data-ic="translate"></i>翻译</button>
+          </div>
+          <!-- 智能体卡片区 -->
+          <section class="agents" id="agentsSection">
+            <div class="agents-head"><h3><i class="ic" data-ic="agent"></i>智能体 · 常用能力</h3><span class="more" id="agentsMore">查看全部 ›</span></div>
+            <div class="cards">
+              <div class="card c1" data-cmd="你都能帮我做什么？">
+                <span class="badge">推荐</span>
+                <div class="card-ico"><i class="ic" data-ic="bulb"></i></div>
+                <h4>全能助手</h4>
+                <p>聊天、问答、搜资料、写文案，一个问题全都帮你搞定。</p>
+                <div class="meta"><span class="tag">对话</span><span>刚刚使用</span></div>
+              </div>
+              <div class="card c2" data-cmd="帮我搜索知识库里的资料并总结">
+                <span class="badge">知识</span>
+                <div class="card-ico"><i class="ic" data-ic="knowledge"></i></div>
+                <h4>知识库问答</h4>
+                <p>把你的文档放进来，基于资料精准回答，答案有据可查。</p>
+                <div class="meta"><span class="tag">检索</span><span>本地知识</span></div>
+              </div>
+              <div class="card c3" data-panel="code">
+                <span class="badge">工具</span>
+                <div class="card-ico"><i class="ic" data-ic="code"></i></div>
+                <h4>代码工作台</h4>
+                <p>写代码、跑命令、看结果，终端与代码能力本机安全执行。</p>
+                <div class="meta"><span class="tag">开发</span><span>本机执行</span></div>
+              </div>
+            </div>
+          </section>
+          <div class="foot-note">墨核 AI Studio · 本地私有 · 数据留本机</div>
         </div>
       </div>
-      <!-- v2.3：底部重复的快捷胶囊已移除（与欢迎区胶囊完全重复） -->
-      <!-- 改动12：会话级产物缩略图条（可折叠，按对话切换） -->
+
+      <!-- 对话态：输入栏停靠区（消息发送后输入框移到这里） -->
+      <div class="input-dock" id="inputDock"></div>
       <div class="art-strip" id="artStrip" style="display:none">
         <button class="art-toggle" id="artToggle" title="折叠/展开产物"><i class="ic" data-ic="package"></i>产物 <span id="artCount">0</span></button>
         <div class="art-thumbs" id="artThumbs"></div>
-      </div>
-      <div class="input-bar">
-        <div class="input-wrap">
-          <button class="io-btn" id="voiceBtn" title="语音输入"><i class="ic" data-ic="voice"></i></button>
-          <button class="io-btn" id="visionBtn" title="发送图片（视觉理解）"><i class="ic" data-ic="vision"></i></button>
-          <button class="io-btn" id="attachBtn" title="添加文件（图片走视觉理解，文档入知识库）"><i class="ic" data-ic="attach"></i></button>
-          <textarea id="input" rows="1" placeholder="对我说点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
-          <button id="sendBtn" title="发送"><i class="ic" data-ic="send"></i></button>
-        </div>
       </div>
       <!-- 隐藏文件输入 -->
       <input type="file" id="visionInput" accept="image/*" hidden>
@@ -202,17 +241,20 @@
         <div class="settings-title"><i class="ic" data-ic="settings"></i> 设置</div>
         <button class="settings-close" id="settingsClose"><i class="ic" data-ic="close"></i></button>
       </div>
-      <div class="settings-tabs" id="settingsTabs">
-        <button class="settings-tab active" data-tab="provider">AI 提供商</button>
-        <button class="settings-tab" data-tab="params">参数</button>
-        <button class="settings-tab" data-tab="ollama">本地模型</button>
-        <button class="settings-tab" data-tab="mcp">MCP</button>
-        <button class="settings-tab" data-tab="appearance">外观</button>
-        <button class="settings-tab" data-tab="data">数据</button>
-        <button class="settings-tab" data-tab="about">关于</button>
+      <div class="settings-main">
+        <div class="settings-tabs" id="settingsTabs">
+          <button class="settings-tab active" data-tab="provider"><i class="ic" data-ic="chat"></i>AI 提供商</button>
+          <button class="settings-tab" data-tab="params"><i class="ic" data-ic="edit"></i>参数</button>
+          <button class="settings-tab" data-tab="ollama"><i class="ic" data-ic="server"></i>本地模型</button>
+          <button class="settings-tab" data-tab="mcp"><i class="ic" data-ic="plug"></i>MCP</button>
+          <button class="settings-tab" data-tab="appearance"><i class="ic" data-ic="bulb"></i>外观</button>
+          <button class="settings-tab" data-tab="data"><i class="ic" data-ic="folder"></i>数据</button>
+          <button class="settings-tab" data-tab="about"><i class="ic" data-ic="bulb"></i>关于</button>
+        </div>
+        <div class="settings-body" id="settingsBody"></div>
       </div>
-      <div class="settings-body" id="settingsBody"></div>
       <div class="settings-foot">
+        <button class="btn sec" id="settingsCancel">取消</button>
         <button class="btn" onclick="saveSettings()">保存设置</button>
       </div>
     </div>

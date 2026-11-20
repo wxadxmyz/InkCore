@@ -300,7 +300,11 @@ async function send(text, opts){
   opts = opts || {};
   text = (text||$("#input").value).trim();
   if(!text || busy) return;
-  const hero=$("#messages .welcome"); if(hero && !opts.keep) hero.remove();   // 首条消息后收起欢迎区
+  // v2.5：首条消息后收起整个欢迎态，并把输入框停靠到底部（1:1 预览的输入框位置在欢迎态时在内容流中）
+  if(!opts.keep){
+    const stage=$("#welcomeStage");
+    if(stage){ parkComposer(); stage.remove(); }   // 输入框先移到安全区，再移除欢迎态
+  }
   if(SESSION_MODEL && !opts.keep) await applyModel();   // 发送前确保模型覆盖已落库
   if(!opts.keep){ $("#input").value=""; autoGrow(); localStorage.removeItem("mohe_draft"); }
   if(!opts.regen){
@@ -493,7 +497,7 @@ function buildConvItem(c, snip){
     if(!confirm("确定删除该对话？")) return;
     await fetch("/api/conversations?id="+c.id,{method:"DELETE"});
     loadConvs();
-    if(SESSION===c.id){ SESSION=null; APPLIED_MODEL=null; SESSION_MODEL=""; setSessionModel(""); $("#messages").innerHTML=""; $("#chatTitle").textContent="新的对话"; }
+    if(SESSION===c.id){ SESSION=null; APPLIED_MODEL=null; SESSION_MODEL=""; setSessionModel(""); if($("#welcomeStage")) parkComposer(); $("#messages").innerHTML=""; renderWelcome(); $("#chatTitle").textContent="新的对话"; }
   };
   d.querySelector('[data-act="rename"]').onclick=async(e)=>{
     e.stopPropagation();
@@ -524,6 +528,7 @@ async function openConversation(sid){
     SESSION = sid;
     $("#chatTitle").textContent = d.title || "对话";
     setSessionModel(d.model||""); APPLIED_MODEL = d.model||"";
+    if($("#welcomeStage")) parkComposer();   // v2.5：欢迎区存在时先保护输入框
     $("#messages").innerHTML = "";
     (d.messages||[]).forEach((m,i)=>{
       if(m.role==="user") addMsg("user", escapeHtml(m.content), null, m.content, i);
@@ -1594,11 +1599,35 @@ async function exportXMind(){
 // v2.3：移除了顶部多会话标签栏（与左侧「最近对话」功能重复，且 ✕ 在只剩一个标签时静默失效）。
 // 现在只保留一个轻量状态槽，供标题/会话 id 同步用；历史会话一律走左侧列表。
 let TABS=[]; let activeTab=-1; let WELCOME_HTML="";
-function captureWelcome(){ const w=$("#messages .welcome"); if(w) WELCOME_HTML=w.outerHTML; }
-function rebindChips(){ $$("#messages .chip, #messages .wcard").forEach(c=> c.onclick=()=>send(c.dataset.cmd)); }
+// v2.5：欢迎区整体（含标语/熊猫/输入框/快捷词/卡片）会被记录重建。
+// 输入框初始位于欢迎区内容流中（1:1 预览），首条消息后停靠到底部 inputDock。
+// 关键：输入框 DOM 实例必须唯一且不被 innerHTML 重建，否则事件绑定丢失。
+function parkComposer(){                       // 把输入框移到安全区 inputDock（不会被 messages.innerHTML 清空）
+  const c=$("#composer"), dock=$("#inputDock");
+  if(c && dock && c.parentElement!==dock) dock.appendChild(c);
+}
+function placeComposerHome(){                  // 把输入框放回欢迎区内容流
+  const c=$("#composer"), home=$("#composerHome");
+  if(c && home && c.parentElement!==home) home.appendChild(c);
+}
+function captureWelcome(){
+  const w=$("#welcomeStage"); if(!w) return;
+  parkComposer();                                        // 临时移出输入框
+  WELCOME_HTML=w.outerHTML;                              // 记录不含输入框的欢迎区
+  placeComposerHome();                                   // 立即放回，保持首屏 1:1
+}
+function rebindChips(){
+  $$("#messages .chip, #messages .wcard").forEach(c=> c.onclick=()=>send(c.dataset.cmd));
+  // 智能体卡片：有 data-cmd 的发预设词，有 data-panel 的开对应面板
+  $$("#messages .card[data-cmd]").forEach(c=> c.onclick=()=>send(c.dataset.cmd));
+  $$("#messages .card[data-panel]").forEach(c=> c.onclick=()=>openPanel(c.dataset.panel));
+}
 function renderWelcome(){
   if(!WELCOME_HTML) return;
-  $("#messages").innerHTML=WELCOME_HTML; rebindChips();
+  parkComposer();                                        // 输入框先移到安全区，避免被 innerHTML 波及
+  $("#messages").innerHTML=WELCOME_HTML;
+  placeComposerHome();                                   // 放回新 welcomeStage 的 composerHome
+  rebindChips();
 }
 function saveTabState(){
   if(activeTab>=0 && TABS[activeTab]){ TABS[activeTab].html=$("#messages").innerHTML; TABS[activeTab].session=SESSION; TABS[activeTab].model=SESSION_MODEL; }
@@ -1762,6 +1791,8 @@ $$(".nav-item").forEach(b=> b.onclick=()=>{
   else openPanel(b.dataset.panel);
 });
 $$(".chip, .wcard").forEach(c=> c.onclick=()=>send(c.dataset.cmd));
+$$(".card[data-cmd]").forEach(c=> c.onclick=()=>send(c.dataset.cmd));       // v2.5：智能体卡片
+$$(".card[data-panel]").forEach(c=> c.onclick=()=>openPanel(c.dataset.panel));
 
 // 导出下拉菜单
 $("#exportBtn").onclick=(e)=>{ e.stopPropagation(); $("#exportMenu").classList.toggle("hidden"); };
@@ -1789,6 +1820,15 @@ $("#attachInput").onchange=(e)=>{ const f=e.target.files[0]; if(f) handleAttach(
 $("#docInput").onchange=(e)=>{ const f=e.target.files[0]; if(f) uploadDoc(f); e.target.value=""; };
 $("#skillImport").onchange=(e)=>{ const f=e.target.files[0]; if(f) importSkills(f); e.target.value=""; };
 $("#skillPackImport").onchange=(e)=>{ const f=e.target.files[0]; if(f) importSkillPack(f); e.target.value=""; };
+
+// v2.5：预览新布局的轻量交互
+$("#sideNewChat").onclick=()=>newTab();                    // 侧栏「新对话」按钮
+$("#settingsCancel").onclick=closeSettings;                // 设置弹窗「取消」
+$$(".tabs .tab").forEach(t=> t.onclick=()=>{               // 会话 / 空间 标签切换
+  $$(".tabs .tab").forEach(x=>x.classList.remove("active")); t.classList.add("active");
+});
+(function(){ const d=$("#deepThink"); if(d) d.onclick=()=> d.classList.toggle("on"); })();  // 深度思考开关
+(function(){ const m=$("#agentsMore"); if(m) m.onclick=()=> openPanel("agent"); })();         // 智能体「查看全部」
 
 // ---------- 拖拽：图片→视觉理解；文件→知识库 ----------
 const inputEl = $("#input");
